@@ -1,0 +1,740 @@
+{% extends "modern_base.html" %}
+{% load static %}
+
+{% block title %}Point of Sale - Ellar Store{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid" style="grid-template-columns: 1.2fr 1fr; gap: var(--spacing-xl); height: calc(100vh - 200px);">
+    <!-- Product Search & Selection -->
+    <div class="modern-table-container" style="height: fit-content;">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: var(--spacing-sm);">
+                <i data-lucide="search" style="width: 20px; height: 20px;"></i>
+                Product Search
+            </h3>
+            <button onclick="openProductBrowser()" class="btn btn-secondary">
+                <i data-lucide="package-2" style="width: 16px; height: 16px;"></i>
+                Browse Products
+            </button>
+        </div>
+
+        <div style="padding: var(--spacing-xl);">
+            <!-- Search Input -->
+            <div style="position: relative; margin-bottom: var(--spacing-xl);">
+                <i data-lucide="search" style="position: absolute; left: var(--spacing-md); top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--light-muted);"></i>
+                <input type="text" id="product_search" placeholder="Enter SKU, Barcode, or Product Name..." 
+                       style="width: 100%; padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-lg) 2.5rem; border: 2px solid var(--light-border); border-radius: var(--radius-lg); font-size: 1rem;">
+            </div>
+
+            <!-- Product Info Display -->
+            <div id="product_info" class="glass-card" style="display: none; padding: var(--spacing-xl); margin-bottom: var(--spacing-xl);">
+                <h4 style="margin-bottom: var(--spacing-lg); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Product Details</h4>
+                <div style="display: grid; gap: var(--spacing-md);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: var(--light-muted);">Name:</span>
+                        <span id="product_name" style="font-weight: 600;">-</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: var(--light-muted);">SKU:</span>
+                        <span id="product_sku" style="font-weight: 600;">-</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: var(--light-muted);">Price:</span>
+                        <span id="product_price" style="font-weight: 600; color: #10b981;">₱0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: var(--light-muted);">Available:</span>
+                        <span id="product_available" style="font-weight: 600;">0 units</span>
+                    </div>
+                </div>
+                
+                <div style="margin-top: var(--spacing-xl); display: flex; gap: var(--spacing-md); align-items: center;">
+                    <label style="color: var(--light-muted); font-weight: 500;">Quantity:</label>
+                    <input type="number" id="quantity" value="1" min="1" 
+                           style="padding: var(--spacing-sm); border: 1px solid var(--light-border); border-radius: var(--radius-md); width: 100px;">
+                    <button onclick="addToCart()" class="btn btn-primary">
+                        <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+                        Add to Cart
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="dashboard-grid" style="grid-template-columns: repeat(2, 1fr); gap: var(--spacing-md);">
+                <button onclick="clearCart()" class="btn btn-secondary" style="justify-content: center;">
+                    <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                    Clear Cart
+                </button>
+                <button onclick="openProductBrowser()" class="btn btn-secondary" style="justify-content: center;">
+                    <i data-lucide="grid" style="width: 16px; height: 16px;"></i>
+                    View All
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cart & Checkout -->
+    <div class="modern-table-container" style="display: flex; flex-direction: column; height: 100%;">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: var(--spacing-sm);">
+                <i data-lucide="shopping-cart" style="width: 20px; height: 20px;"></i>
+                Shopping Cart
+                <span id="cart_count" class="status-badge status-success" style="margin-left: var(--spacing-sm);">0</span>
+            </h3>
+        </div>
+
+        <!-- Cart Items -->
+        <div class="cart-items-container" style="flex: 1; max-height: 250px; overflow-y: auto; border: 1px solid var(--light-border); border-radius: var(--radius-lg); margin-bottom: var(--spacing-md);">
+            <table class="modern-table">
+                <thead style="position: sticky; top: 0; background: var(--light-surface); z-index: 10;">
+                    <tr>
+                        <th>Product</th>
+                        <th>Price</th>
+                        <th>Qty</th>
+                        <th>Subtotal</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="cart_body">
+                    <!-- Cart items will be populated here -->
+                </tbody>
+            </table>
+            <div id="empty_cart_message" style="text-align: center; padding: var(--spacing-2xl); color: var(--light-muted);">
+                <i data-lucide="shopping-cart" style="width: 48px; height: 48px; margin-bottom: var(--spacing-md); opacity: 0.5;"></i>
+                <div>Cart is empty</div>
+                <div style="font-size: 0.875rem; margin-top: var(--spacing-sm);">Add products to get started</div>
+            </div>
+        </div>
+
+        <!-- Cart Summary - Fixed at bottom -->
+        <div style="padding: var(--spacing-xl); border-top: 1px solid var(--light-border); flex-shrink: 0;">
+            <div style="display: grid; gap: var(--spacing-md); margin-bottom: var(--spacing-xl);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--light-muted);">Subtotal:</span>
+                    <span style="font-weight: 600;">₱<span id="subtotal">0.00</span></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: var(--spacing-md);">
+                    <label for="discount" style="color: var(--light-muted);">Discount:</label>
+                    <div style="display: flex; gap: var(--spacing-sm); align-items: center;">
+                        <input type="number" id="discount" value="0" min="0" step="0.01" 
+                               style="padding: var(--spacing-sm); border: 1px solid var(--light-border); border-radius: var(--radius-md); width: 100px;">
+                        <button onclick="applyDiscount()" class="btn btn-secondary" style="padding: var(--spacing-xs) var(--spacing-sm);">Apply</button>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: var(--spacing-md); border-top: 2px solid var(--light-border);">
+                    <span style="font-weight: 600; font-size: 1.125rem;">Total:</span>
+                    <span style="font-weight: 700; font-size: 1.25rem; color: #667eea;">₱<span id="total">0.00</span></span>
+                </div>
+            </div>
+
+            <!-- Checkout Section -->
+            <div style="display: grid; gap: var(--spacing-md);">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: var(--spacing-md);">
+                    <label for="cash_input" style="color: var(--light-muted);">Cash Received:</label>
+                    <input type="number" id="cash_input" value="0" min="0" step="0.01" 
+                           style="padding: var(--spacing-sm); border: 1px solid var(--light-border); border-radius: var(--radius-md); width: 120px;">
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--light-muted);">Change:</span>
+                    <span style="font-weight: 700; font-size: 1.125rem; color: #10b981;">₱<span id="change">0.00</span></span>
+                </div>
+                <button onclick="checkout()" class="btn btn-primary" style="width: 100%; padding: var(--spacing-lg); font-size: 1rem; margin-top: var(--spacing-md);">
+                    <i data-lucide="credit-card" style="width: 18px; height: 18px;"></i>
+                    Checkout
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Receipt Modal -->
+<div id="receipt_modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Transaction Receipt</h3>
+            <button onclick="closeReceiptModal()" class="btn btn-secondary">
+                <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+            </button>
+        </div>
+        
+        <div id="receipt_content" style="padding: var(--spacing-lg); display: flex; justify-content: center; align-items: flex-start; min-height: 0;">
+            <!-- Receipt content will be loaded here -->
+        </div>
+        
+            </div>
+</div>
+
+<!-- Product Browser Modal -->
+<div id="product_browser_modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 900px;">
+        <div class="modal-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Browse Products</h3>
+            <button onclick="closeProductBrowser()" class="btn btn-secondary">
+                <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+            </button>
+        </div>
+        
+        <div style="padding: var(--spacing-lg);">
+            <div style="display: flex; gap: var(--spacing-md); margin-bottom: var(--spacing-lg); align-items: center;">
+                <label for="product_type_filter" style="color: var(--light-muted);">Filter by category:</label>
+                <select id="product_type_filter" name="type" class="btn btn-secondary" style="padding: var(--spacing-sm) var(--spacing-md);">
+                    <option value="">All Types</option>
+                    {% for value, label in product_types %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <button onclick="applyProductFilter()" class="btn btn-primary">Apply Filter</button>
+                <button onclick="clearProductFilter()" class="btn btn-secondary">Clear</button>
+            </div>
+            
+            <div id="product_browser_content" style="max-height: 400px; overflow-y: auto;">
+                <!-- Products will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* POS Specific Styles */
+.pos-container {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: var(--spacing-xl);
+    height: calc(100vh - 200px);
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: var(--light-surface);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-2xl);
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+body.dark-mode .modal-content {
+    background: var(--dark-card);
+}
+
+.modal-header {
+    padding: var(--spacing-xl);
+    border-bottom: 1px solid var(--light-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+body.dark-mode .modal-header {
+    border-bottom-color: var(--dark-border);
+}
+
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.product-card {
+    background: var(--light-surface);
+    border: 1px solid var(--light-border);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+body.dark-mode .product-card {
+    background: var(--dark-card);
+    border-color: var(--dark-border);
+}
+
+.product-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.product-card h4 {
+    margin: 0 0 var(--spacing-sm) 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.product-card .price {
+    color: #10b981;
+    font-weight: 700;
+    font-size: 1.125rem;
+}
+
+.product-card .stock {
+    color: var(--light-muted);
+    font-size: 0.75rem;
+}
+
+/* Custom Scrollbar Styling */
+.cart-items-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.cart-items-container::-webkit-scrollbar-track {
+    background: var(--light-bg);
+    border-radius: 3px;
+}
+
+.cart-items-container::-webkit-scrollbar-thumb {
+    background: var(--light-border);
+    border-radius: 3px;
+}
+
+.cart-items-container::-webkit-scrollbar-thumb:hover {
+    background: var(--light-muted);
+}
+
+body.dark-mode .cart-items-container::-webkit-scrollbar-track {
+    background: var(--dark-bg);
+}
+
+body.dark-mode .cart-items-container::-webkit-scrollbar-thumb {
+    background: var(--dark-border);
+}
+
+body.dark-mode .cart-items-container::-webkit-scrollbar-thumb:hover {
+    background: var(--dark-muted);
+}
+
+/* Responsive Design */
+@media (max-width: 1400px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr !important;
+    }
+}
+
+@media (max-width: 1024px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr !important;
+        height: auto;
+    }
+    
+    .modern-table-container:last-child {
+        position: sticky;
+        bottom: 0;
+        background: var(--light-surface);
+        border-top: 2px solid var(--light-border);
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .product-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let cart = [];
+let currentProduct = null;
+
+// Initialize Lucide icons
+lucide.createIcons();
+
+// Search functionality
+document.getElementById('product_search').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchProduct();
+    }
+});
+
+function searchProduct() {
+    const searchTerm = document.getElementById('product_search').value.trim();
+    if (!searchTerm) return;
+
+    fetch(`/pos/search/?q=${encodeURIComponent(searchTerm)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayProductInfo(data.product);
+            } else {
+                showMessage(data.message || 'Product not found', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage('Error searching product', 'error');
+        });
+}
+
+function displayProductInfo(product) {
+    currentProduct = product;
+    document.getElementById('product_name').textContent = product.name;
+    document.getElementById('product_sku').textContent = product.sku;
+    document.getElementById('product_price').textContent = `₱${product.unit_price}`;
+    document.getElementById('product_available').textContent = `${product.quantity} units`;
+    document.getElementById('quantity').value = 1;
+    document.getElementById('quantity').max = product.quantity;
+    document.getElementById('product_info').style.display = 'block';
+    
+    // Add animation
+    document.getElementById('product_info').style.animation = 'pulse 0.3s ease';
+}
+
+function addToCart() {
+    if (!currentProduct) {
+        showMessage('Please select a product first', 'warning');
+        return;
+    }
+
+    const quantity = parseInt(document.getElementById('quantity').value);
+    if (quantity <= 0 || quantity > currentProduct.quantity) {
+        showMessage('Invalid quantity', 'error');
+        return;
+    }
+
+    // Check if product already in cart
+    const existingItem = cart.find(item => item.id === currentProduct.id);
+    if (existingItem) {
+        if (existingItem.quantity + quantity > currentProduct.quantity) {
+            showMessage('Insufficient stock', 'error');
+            return;
+        }
+        existingItem.quantity += quantity;
+    } else {
+        cart.push({
+            id: currentProduct.id,
+            name: currentProduct.name,
+            price: currentProduct.unit_price,
+            quantity: quantity
+        });
+    }
+
+    updateCart();
+    clearProductInfo();
+    showMessage('Product added to cart', 'success');
+}
+
+function updateCart() {
+    const cartBody = document.getElementById('cart_body');
+    const emptyMessage = document.getElementById('empty_cart_message');
+    
+    if (cart.length === 0) {
+        cartBody.innerHTML = '';
+        emptyMessage.style.display = 'block';
+        document.getElementById('cart_count').textContent = '0';
+    } else {
+        emptyMessage.style.display = 'none';
+        cartBody.innerHTML = cart.map((item, index) => `
+            <tr>
+                <td>${item.name}</td>
+                <td>₱${item.price.toFixed(2)}</td>
+                <td>
+                    <input type="number" value="${item.quantity}" min="1" max="${item.max_quantity || 99}" 
+                           onchange="updateQuantity(${index}, this.value)" 
+                           style="width: 60px; padding: 4px; border: 1px solid var(--light-border); border-radius: 4px;">
+                </td>
+                <td>₱${(item.price * item.quantity).toFixed(2)}</td>
+                <td>
+                    <button onclick="removeFromCart(${index})" class="btn btn-secondary" style="padding: 4px 8px;">
+                        <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+        
+        document.getElementById('cart_count').textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
+    }
+    
+    updateTotals();
+    lucide.createIcons();
+}
+
+function updateQuantity(index, newQuantity) {
+    const quantity = parseInt(newQuantity);
+    if (quantity <= 0) {
+        removeFromCart(index);
+    } else {
+        cart[index].quantity = quantity;
+        updateCart();
+    }
+}
+
+function removeFromCart(index) {
+    cart.splice(index, 1);
+    updateCart();
+    showMessage('Item removed from cart', 'info');
+}
+
+function updateTotals() {
+    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const discount = parseFloat(document.getElementById('discount').value) || 0;
+    const total = Math.max(0, subtotal - discount);
+    const cash = parseFloat(document.getElementById('cash_input').value) || 0;
+    const change = Math.max(0, cash - total);
+
+    document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+    document.getElementById('total').textContent = total.toFixed(2);
+    document.getElementById('change').textContent = change.toFixed(2);
+}
+
+function applyDiscount() {
+    updateTotals();
+    showMessage('Discount applied', 'success');
+}
+
+function clearCart() {
+    if (cart.length > 0 && confirm('Are you sure you want to clear the cart?')) {
+        cart = [];
+        updateCart();
+        document.getElementById('discount').value = 0;
+        document.getElementById('cash_input').value = 0;
+        showMessage('Cart cleared', 'info');
+    }
+}
+
+function clearProductInfo() {
+    document.getElementById('product_info').style.display = 'none';
+    document.getElementById('product_search').value = '';
+    currentProduct = null;
+}
+
+function checkout() {
+    if (cart.length === 0) {
+        showMessage('Cart is empty', 'error');
+        return;
+    }
+
+    const total = parseFloat(document.getElementById('total').textContent);
+    const cash = parseFloat(document.getElementById('cash_input').value) || 0;
+
+    if (cash < total) {
+        showMessage('Insufficient cash received', 'error');
+        return;
+    }
+
+    const transactionData = {
+        items: cart.map(item => ({
+            product_id: item.id,
+            quantity: item.quantity
+        })),
+        discount: parseFloat(document.getElementById('discount').value) || 0,
+        cash_received: cash
+    };
+
+    fetch('/pos/checkout/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(transactionData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('Transaction completed successfully!', 'success');
+            cart = [];
+            updateCart();
+            document.getElementById('discount').value = 0;
+            document.getElementById('cash_input').value = 0;
+            
+            // Show receipt as modal
+            showReceiptModal(data.transaction_id);
+        } else {
+            showMessage(data.message || 'Transaction failed', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMessage('Error processing transaction', 'error');
+    });
+}
+
+// Product Browser
+function openProductBrowser() {
+    document.getElementById('product_browser_modal').style.display = 'flex';
+    loadProducts();
+}
+
+function closeProductBrowser() {
+    document.getElementById('product_browser_modal').style.display = 'none';
+}
+
+function loadProducts(filter = '') {
+    const url = filter ? `/pos/products/?type=${filter}` : '/pos/products/';
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            const content = document.getElementById('product_browser_content');
+            if (data.products && data.products.length > 0) {
+                content.innerHTML = `
+                    <div class="product-grid">
+                        ${data.products.map(product => `
+                            <div class="product-card" onclick="selectProduct(${product.id})">
+                                <h4>${product.name}</h4>
+                                <div class="price">₱${product.unit_price}</div>
+                                <div class="stock">Stock: ${product.quantity}</div>
+                                <div class="sku">SKU: ${product.sku}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--light-muted);">No products found</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading products:', error);
+        });
+}
+
+function selectProduct(productId) {
+    fetch(`/pos/search/?q=${productId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayProductInfo(data.product);
+                closeProductBrowser();
+            }
+        });
+}
+
+function applyProductFilter() {
+    const filter = document.getElementById('product_type_filter').value;
+    loadProducts(filter);
+}
+
+function clearProductFilter() {
+    document.getElementById('product_type_filter').value = '';
+    loadProducts();
+}
+
+// Utility functions
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function showMessage(message, type) {
+    // Create toast notification
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `
+        <i data-lucide="${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : 'info'}" style="width: 20px; height: 20px;"></i>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(toast);
+    lucide.createIcons();
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + Enter to add to cart
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        addToCart();
+    }
+    
+    // F1 to search
+    if (e.key === 'F1') {
+        e.preventDefault();
+        document.getElementById('product_search').focus();
+    }
+    
+    // F2 to browse products
+    if (e.key === 'F2') {
+        e.preventDefault();
+        openProductBrowser();
+    }
+    
+    // Escape to close modal
+    if (e.key === 'Escape') {
+        closeProductBrowser();
+    }
+});
+
+// Receipt Modal Functions
+function showReceiptModal(transactionId) {
+    fetch(`/pos/receipt/${transactionId}/`)
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('receipt_content').innerHTML = html;
+            document.getElementById('receipt_modal').style.display = 'flex';
+            // Reinitialize Lucide icons for the new content
+            lucide.createIcons();
+        })
+        .catch(error => {
+            console.error('Error loading receipt:', error);
+            showMessage('Error loading receipt', 'error');
+        });
+}
+
+function closeReceiptModal() {
+    document.getElementById('receipt_modal').style.display = 'none';
+}
+
+function printReceipt() {
+    const receiptContent = document.getElementById('receipt_content').innerHTML;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+        <head>
+            <title>Print Receipt</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                @media print { body { padding: 0; } }
+            </style>
+        </head>
+        <body>
+            ${receiptContent}
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    updateTotals();
+    document.getElementById('cash_input').addEventListener('input', updateTotals);
+    document.getElementById('discount').addEventListener('input', updateTotals);
+});
+</script>
+{% endblock %}

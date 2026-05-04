@@ -1,0 +1,314 @@
+{% extends 'modern_base.html' %}
+
+{% block title %}Stock Report - Ellar Store{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <div class="kpi-card primary">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Total Movements</div>
+                <div class="kpi-value">{{ movements.count }}</div>
+                <div class="kpi-change positive">
+                    <i data-lucide="activity" style="width: 16px; height: 16px;"></i>
+                    <span>All time</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="trending-up"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card success">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Stock In</div>
+                <div class="kpi-value">{{ movements|filter_movement_type:'IN'|length }}</div>
+                <div class="kpi-change positive">
+                    <i data-lucide="arrow-down-left" style="width: 16px; height: 16px;"></i>
+                    <span>Items received</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="package-plus"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card warning">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Stock Out</div>
+                <div class="kpi-value">{{ movements|filter_movement_type:'OUT'|length }}</div>
+                <div class="kpi-change negative">
+                    <i data-lucide="arrow-up-right" style="width: 16px; height: 16px;"></i>
+                    <span>Items sold/used</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="package-minus"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Net Movement</div>
+                <div class="kpi-value">{{ movements|filter_movement_type:'IN'|length|add:movements|filter_movement_type:'OUT'|length|add:-1 }}</div>
+                <div class="kpi-change positive">
+                    <i data-lucide="bar-chart" style="width: 16px; height: 16px;"></i>
+                    <span>Net change</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="minus"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stock Movements Table -->
+<div class="modern-table-container">
+    <div class="table-header">
+        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: var(--spacing-sm);">
+            <i data-lucide="list" style="width: 20px; height: 20px;"></i>
+            Stock Movement History
+        </h3>
+        <div class="table-actions">
+            <button onclick="window.print()" class="btn btn-secondary">
+                <i data-lucide="printer" style="width: 16px; height: 16px;"></i>
+                Print
+            </button>
+            <a href="{% url 'inventory:stock-export' %}" class="btn btn-primary">
+                <i data-lucide="download" style="width: 16px; height: 16px;"></i>
+                Export Excel
+            </a>
+        </div>
+    </div>
+
+    <div style="max-height: 600px; overflow-y: auto;">
+        <table class="modern-table">
+            <thead>
+                <tr>
+                    <th>Date & Time</th>
+                    <th>Product</th>
+                    <th>SKU</th>
+                    <th>Type</th>
+                    <th>Quantity</th>
+                    <th>Note</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for movement in movements %}
+                    <tr>
+                        <td>
+                            <div style="display: flex; flex-direction: column;">
+                                <span style="font-weight: 600;">{{ movement.created_at|date:"M d, Y" }}</span>
+                                <span style="font-size: 0.875rem; color: var(--light-muted);">{{ movement.created_at|date:"H:i" }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
+                                <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.75rem;">
+                                    {{ movement.product.name|first|upper }}
+                                </div>
+                                {{ movement.product.name }}
+                            </div>
+                        </td>
+                        <td>
+                            <span style="font-family: monospace; background: var(--light-bg); padding: 2px 6px; border-radius: var(--radius-sm); font-size: 0.875rem;">
+                                {{ movement.product.sku }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if movement.movement_type == 'IN' %}
+                                <span class="status-badge status-success">
+                                    <i data-lucide="arrow-down-left" style="width: 12px; height: 12px; margin-right: 4px;"></i>
+                                    Stock In
+                                </span>
+                            {% else %}
+                                <span class="status-badge status-warning">
+                                    <i data-lucide="arrow-up-right" style="width: 12px; height: 12px; margin-right: 4px;"></i>
+                                    Stock Out
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span style="font-weight: 700; font-size: 1.125rem; {% if movement.movement_type == 'IN' %}color: #10b981;{% else %}color: #f59e0b;{% endif %}">
+                                {% if movement.movement_type == 'IN' %}+{% endif %}{{ movement.quantity }}
+                            </span>
+                        </td>
+                        <td>
+                            <span style="color: var(--light-muted); font-style: italic;">
+                                {{ movement.note|default:"-"|truncatechars:50 }}
+                            </span>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: var(--spacing-2xl);">
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: var(--spacing-lg);">
+                                <i data-lucide="inbox" style="width: 64px; height: 64px; color: var(--light-muted); opacity: 0.5;"></i>
+                                <div>
+                                    <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: var(--spacing-sm);">No Stock Movements</div>
+                                    <div style="color: var(--light-muted);">Stock movements will appear here once you start tracking inventory changes</div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="modern-table-container">
+    <div class="table-header">
+        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: var(--spacing-sm);">
+            <i data-lucide="zap" style="width: 20px; height: 20px;"></i>
+            Quick Actions
+        </h3>
+    </div>
+    <div style="padding: var(--spacing-xl); display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--spacing-lg);">
+        <a href="{% url 'inventory:product-add' %}" class="btn btn-secondary" style="justify-content: center; padding: var(--spacing-lg);">
+            <i data-lucide="plus-circle" style="width: 20px; height: 20px;"></i>
+            Add Product
+        </a>
+        <a href="{% url 'inventory:product-list' %}" class="btn btn-secondary" style="justify-content: center; padding: var(--spacing-lg);">
+            <i data-lucide="package-2" style="width: 20px; height: 20px;"></i>
+            View Inventory
+        </a>
+        <a href="{% url 'inventory:pos' %}" class="btn btn-secondary" style="justify-content: center; padding: var(--spacing-lg);">
+            <i data-lucide="shopping-cart" style="width: 20px; height: 20px;"></i>
+            Point of Sale
+        </a>
+        <a href="{% url 'inventory:dashboard' %}" class="btn btn-secondary" style="justify-content: center; padding: var(--spacing-lg);">
+            <i data-lucide="layout-dashboard" style="width: 20px; height: 20px;"></i>
+            Dashboard
+        </a>
+    </div>
+</div>
+
+<style>
+/* Print styles */
+@media print {
+    .table-actions {
+        display: none !important;
+    }
+    
+    .modern-table-container {
+        box-shadow: none !important;
+        border: 1px solid #000 !important;
+    }
+    
+    .modern-table {
+        box-shadow: none !important;
+    }
+    
+    .status-badge {
+        background: #f0f0f0 !important;
+        color: #000 !important;
+        border: 1px solid #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize Lucide icons
+lucide.createIcons();
+
+// Search functionality
+const searchInput = document.createElement('input');
+searchInput.type = 'text';
+searchInput.placeholder = 'Search movements...';
+searchInput.style.cssText = `
+    padding: var(--spacing-md);
+    border: 1px solid var(--light-border);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    margin-bottom: var(--spacing-lg);
+    width: 100%;
+    max-width: 300px;
+`;
+
+// Add search to the table header
+const tableHeader = document.querySelector('.table-header');
+if (tableHeader) {
+    const searchContainer = document.createElement('div');
+    searchContainer.style.cssText = 'display: flex; align-items: center; gap: var(--spacing-md);';
+    searchContainer.appendChild(searchInput);
+    
+    // Insert after the h3
+    const h3 = tableHeader.querySelector('h3');
+    h3.insertAdjacentElement('afterend', searchContainer);
+}
+
+// Search functionality
+searchInput.addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const rows = document.querySelectorAll('.modern-table tbody tr');
+    
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + P to print
+    if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        window.print();
+    }
+    
+    // Ctrl/Cmd + E to export
+    if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault();
+        document.querySelector('a[href*="export"]').click();
+    }
+    
+    // Ctrl/Cmd + F to focus search
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        searchInput.focus();
+    }
+});
+
+// Add animation to table rows
+document.addEventListener('DOMContentLoaded', function() {
+    const rows = document.querySelectorAll('.modern-table tbody tr');
+    rows.forEach((row, index) => {
+        row.style.opacity = '0';
+        row.style.transform = 'translateX(-20px)';
+        setTimeout(() => {
+            row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            row.style.opacity = '1';
+            row.style.transform = 'translateX(0)';
+        }, index * 50);
+    });
+});
+
+// Export functionality
+function exportToExcel() {
+    window.location.href = '{% url "inventory:stock-export" %}';
+}
+
+// Print functionality
+function printReport() {
+    window.print();
+}
+</script>
+{% endblock %}

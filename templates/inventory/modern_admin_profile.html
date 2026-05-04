@@ -1,0 +1,451 @@
+{% extends "modern_base.html" %}
+
+{% block title %}Admin Profile - Ellar Store{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <!-- Profile Overview -->
+    <div class="modern-table-container">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: var(--spacing-sm);">
+                <i data-lucide="user" style="width: 20px; height: 20px;"></i>
+                Profile Information
+            </h3>
+            <button onclick="toggleEditMode()" class="btn btn-secondary" id="editBtn">
+                <i data-lucide="edit" style="width: 16px; height: 16px;"></i>
+                Edit Profile
+            </button>
+        </div>
+
+        <div style="padding: var(--spacing-xl);">
+            <!-- Profile Header -->
+            <div style="display: flex; align-items: center; gap: var(--spacing-xl); margin-bottom: var(--spacing-2xl);">
+                <div style="width: 80px; height: 80px; border-radius: 50%; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: 700;">
+                    {{ user.username|first|upper }}
+                </div>
+                <div>
+                    <h2 style="margin: 0 0 var(--spacing-xs) 0; font-size: 1.5rem; font-weight: 700;">{{ user.get_full_name|default:user.username }}</h2>
+                    <p style="margin: 0; color: var(--light-muted);">@{{ user.username }}</p>
+                    <div style="display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-sm);">
+                        <span class="status-badge status-success">Active</span>
+                        {% if user.is_superuser %}
+                            <span class="status-badge status-primary">Superuser</span>
+                        {% else %}
+                            <span class="status-badge status-secondary">Staff</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Form -->
+            <form method="post" id="profileForm">
+                {% csrf_token %}
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" id="username" name="username" value="{{ user.username }}" readonly disabled 
+                               style="background: var(--light-bg); cursor: not-allowed;">
+                        <small class="form-help">Username cannot be changed</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="first_name" class="form-label">First Name</label>
+                        <input type="text" id="first_name" name="first_name" value="{{ user.first_name }}" disabled>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="last_name" class="form-label">Last Name</label>
+                        <input type="text" id="last_name" name="last_name" value="{{ user.last_name }}" disabled>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email" class="form-label">Email Address</label>
+                        <input type="email" id="email" name="email" value="{{ user.email }}" disabled>
+                    </div>
+                </div>
+
+                <div class="form-actions" id="formActions" style="display: none; margin-top: var(--spacing-2xl);">
+                    <button type="submit" class="btn btn-primary">
+                        <i data-lucide="save" style="width: 16px; height: 16px;"></i>
+                        Save Changes
+                    </button>
+                    <button type="button" onclick="toggleEditMode()" class="btn btn-secondary">
+                        <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Account Statistics -->
+    <div class="modern-table-container">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: var(--spacing-sm);">
+                <i data-lucide="bar-chart-3" style="width: 20px; height: 20px;"></i>
+                Account Statistics
+            </h3>
+        </div>
+
+        <div style="padding: var(--spacing-xl);">
+            <div class="dashboard-grid" style="grid-template-columns: 1fr;">
+                <div class="glass-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+                        <span style="color: var(--light-muted);">Account Status</span>
+                        <span class="status-badge status-success">Active</span>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+                        <span style="color: var(--light-muted);">Staff Member</span>
+                        <span class="status-badge {% if user.is_staff %}status-success{% else %}status-danger{% endif %}">
+                            {% if user.is_staff %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+                        <span style="color: var(--light-muted);">Superuser</span>
+                        <span class="status-badge {% if user.is_superuser %}status-primary{% else %}status-secondary{% endif %}">
+                            {% if user.is_superuser %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+                        <span style="color: var(--light-muted);">Date Joined</span>
+                        <span style="font-weight: 600;">{{ user.date_joined|date:"M d, Y" }}</span>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+                        <span style="color: var(--light-muted);">Last Login</span>
+                        <span style="font-weight: 600;">{{ user.last_login|date:"M d, Y H:i"|default:"Never" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Security Settings -->
+<div class="modern-table-container">
+    <div class="table-header">
+        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: var(--spacing-sm);">
+            <i data-lucide="shield" style="width: 20px; height: 20px;"></i>
+            Security Settings
+        </h3>
+    </div>
+
+    <div style="padding: var(--spacing-xl);">
+        <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+            <div class="glass-card" style="cursor: pointer;" onclick="showPasswordModal()">
+                <div style="display: flex; align-items: center; gap: var(--spacing-md);">
+                    <div style="width: 48px; height: 48px; border-radius: var(--radius-lg); background: var(--warning-gradient); display: flex; align-items: center; justify-content: center;">
+                        <i data-lucide="key" style="width: 24px; height: 24px; color: white;"></i>
+                    </div>
+                    <div>
+                        <h4 style="margin: 0 0 var(--spacing-xs) 0; font-size: 1rem;">Change Password</h4>
+                        <p style="margin: 0; color: var(--light-muted); font-size: 0.875rem;">Update your account password</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card" style="cursor: pointer;" onclick="showSessionModal()">
+                <div style="display: flex; align-items: center; gap: var(--spacing-md);">
+                    <div style="width: 48px; height: 48px; border-radius: var(--radius-lg); background: var(--primary-gradient); display: flex; align-items: center; justify-content: center;">
+                        <i data-lucide="monitor" style="width: 24px; height: 24px; color: white;"></i>
+                    </div>
+                    <div>
+                        <h4 style="margin: 0 0 var(--spacing-xs) 0; font-size: 1rem;">Active Sessions</h4>
+                        <p style="margin: 0; color: var(--light-muted); font-size: 0.875rem;">Manage active sessions</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card" style="cursor: pointer;" onclick="show2FAModal()">
+                <div style="display: flex; align-items: center; gap: var(--spacing-md);">
+                    <div style="width: 48px; height: 48px; border-radius: var(--radius-lg); background: var(--success-gradient); display: flex; align-items: center; justify-content: center;">
+                        <i data-lucide="smartphone" style="width: 24px; height: 24px; color: white;"></i>
+                    </div>
+                    <div>
+                        <h4 style="margin: 0 0 var(--spacing-xs) 0; font-size: 1rem;">Two-Factor Auth</h4>
+                        <p style="margin: 0; color: var(--light-muted); font-size: 0.875rem;">Configure 2FA security</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="modern-table-container">
+    <div class="table-header">
+        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: var(--spacing-sm);">
+            <i data-lucide="zap" style="width: 20px; height: 20px;"></i>
+            Quick Actions
+        </h3>
+    </div>
+    <div style="padding: var(--spacing-xl); display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--spacing-lg);">
+        <a href="{% url 'inventory:dashboard' %}" class="btn btn-secondary" style="justify-content: center; padding: var(--spacing-lg);">
+            <i data-lucide="layout-dashboard" style="width: 20px; height: 20px;"></i>
+            Dashboard
+        </a>
+        <a href="{% url 'inventory:product-list' %}" class="btn btn-secondary" style="justify-content: center; padding: var(--spacing-lg);">
+            <i data-lucide="package-2" style="width: 20px; height: 20px;"></i>
+            Products
+        </a>
+        <a href="{% url 'inventory:pos' %}" class="btn btn-secondary" style="justify-content: center; padding: var(--spacing-lg);">
+            <i data-lucide="shopping-cart" style="width: 20px; height: 20px;"></i>
+            Point of Sale
+        </a>
+        <a href="{% url 'inventory:reports' %}" class="btn btn-secondary" style="justify-content: center; padding: var(--spacing-lg);">
+            <i data-lucide="file-text" style="width: 20px; height: 20px;"></i>
+            Reports
+        </a>
+        {% if user.username == 'EllarMiniMart' %}
+        <a href="{% url 'inventory:user-approvals' %}" class="btn btn-warning" style="justify-content: center; padding: var(--spacing-lg); background: var(--warning-gradient);">
+            <i data-lucide="users" style="width: 20px; height: 20px;"></i>
+            User Approvals
+        </a>
+        {% endif %}
+        <a href="{% url 'inventory:staff-list' %}" class="btn btn-info staff-flash-btn" style="justify-content: center; padding: var(--spacing-lg); background: var(--info-gradient);">
+            <i data-lucide="users" style="width: 20px; height: 20px;"></i>
+            View Staff
+        </a>
+        <a href="{% url 'inventory:logout' %}" class="btn btn-danger" style="justify-content: center; padding: var(--spacing-lg); background: var(--danger-gradient);">
+            <i data-lucide="log-out" style="width: 20px; height: 20px;"></i>
+            Logout
+        </a>
+    </div>
+</div>
+
+<style>
+/* Profile Specific Styles */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-label {
+    font-weight: 600;
+    color: var(--light-text);
+    margin-bottom: var(--spacing-sm);
+    font-size: 0.875rem;
+}
+
+body.dark-mode .form-label {
+    color: var(--dark-text);
+}
+
+.form-group input {
+    padding: var(--spacing-md);
+    border: 2px solid var(--light-border);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    transition: all var(--transition-fast);
+    background: var(--light-surface);
+    color: var(--light-text);
+}
+
+body.dark-mode .form-group input {
+    background: var(--dark-card);
+    border-color: var(--dark-border);
+    color: var(--dark-text);
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-group input:disabled {
+    background: var(--light-bg);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+body.dark-mode .form-group input:disabled {
+    background: var(--dark-bg);
+}
+
+.form-help {
+    color: var(--light-muted);
+    font-size: 0.75rem;
+    margin-top: var(--spacing-xs);
+}
+
+.form-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: center;
+}
+
+.glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-2xl);
+    padding: var(--spacing-lg);
+    transition: all var(--transition-fast);
+}
+
+.glass-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .form-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Staff button flashing animation */
+.staff-flash-btn {
+    animation: staffPulse 2s ease-in-out infinite;
+}
+
+@keyframes staffPulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 5px 15px rgba(59, 130, 246, 0.3);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 8px 25px rgba(59, 130, 246, 0.5);
+    }
+}
+
+.staff-flash-btn:hover {
+    animation: none;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize Lucide icons
+lucide.createIcons();
+
+let isEditMode = false;
+
+function toggleEditMode() {
+    isEditMode = !isEditMode;
+    const formInputs = document.querySelectorAll('#profileForm input:not([readonly])');
+    const editBtn = document.getElementById('editBtn');
+    const formActions = document.getElementById('formActions');
+
+    if (isEditMode) {
+        // Enable edit mode
+        formInputs.forEach(input => {
+            input.disabled = false;
+            input.style.borderColor = '#667eea';
+        });
+        
+        editBtn.innerHTML = '<i data-lucide="x" style="width: 16px; height: 16px;"></i> Cancel';
+        editBtn.classList.remove('btn-secondary');
+        editBtn.classList.add('btn-danger');
+        formActions.style.display = 'flex';
+    } else {
+        // Disable edit mode
+        formInputs.forEach(input => {
+            input.disabled = true;
+            input.style.borderColor = '';
+        });
+        
+        editBtn.innerHTML = '<i data-lucide="edit" style="width: 16px; height: 16px;"></i> Edit Profile';
+        editBtn.classList.remove('btn-danger');
+        editBtn.classList.add('btn-secondary');
+        formActions.style.display = 'none';
+    }
+    
+    lucide.createIcons();
+}
+
+// Modal functions (placeholders for now)
+function showPasswordModal() {
+    showMessage('Password change feature coming soon!', 'info');
+}
+
+function showSessionModal() {
+    showMessage('Session management feature coming soon!', 'info');
+}
+
+function show2FAModal() {
+    showMessage('Two-factor authentication feature coming soon!', 'info');
+}
+
+// Form submission
+document.getElementById('profileForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Show loading state
+    const submitBtn = document.querySelector('#formActions .btn-primary');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i data-lucide="loader-2" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"></i> Saving...';
+    submitBtn.disabled = true;
+    
+    // Simulate API call
+    setTimeout(() => {
+        showMessage('Profile updated successfully!', 'success');
+        toggleEditMode();
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+        lucide.createIcons();
+    }, 1500);
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + E to toggle edit mode
+    if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault();
+        toggleEditMode();
+    }
+    
+    // Ctrl/Cmd + S to save (only in edit mode)
+    if ((e.ctrlKey || e.metaKey) && e.key === 's' && isEditMode) {
+        e.preventDefault();
+        document.getElementById('profileForm').dispatchEvent(new Event('submit'));
+    }
+});
+
+// Add animation on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const cards = document.querySelectorAll('.glass-card, .modern-table-container');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+</script>
+{% endblock %}

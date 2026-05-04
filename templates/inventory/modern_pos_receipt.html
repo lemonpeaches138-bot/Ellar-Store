@@ -1,0 +1,481 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt - Ellar Store</title>
+    
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-lg);
+        }
+
+        .receipt-container {
+            background: white;
+            border-radius: var(--radius-2xl);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 380px;
+            margin: 0 auto;
+            overflow: hidden;
+            position: relative;
+            transform: scale(0.95);
+            transform-origin: center;
+        }
+
+        .receipt-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--primary-gradient);
+        }
+
+        .receipt-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: var(--spacing-xl);
+            text-align: center;
+            position: relative;
+        }
+
+        .receipt-logo {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto var(--spacing-md);
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            backdrop-filter: blur(10px);
+        }
+
+        .receipt-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .receipt-subtitle {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .receipt-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            opacity: 0.8;
+        }
+
+        .receipt-body {
+            padding: var(--spacing-xl);
+        }
+
+        .receipt-info {
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .receipt-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-sm) 0;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.875rem;
+        }
+
+        .receipt-row:last-child {
+            border-bottom: none;
+        }
+
+        .receipt-label {
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .receipt-value {
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .receipt-items {
+            margin: var(--spacing-xl) 0;
+            border-top: 2px solid #f1f5f9;
+            border-bottom: 2px solid #f1f5f9;
+            padding: var(--spacing-lg) 0;
+        }
+
+        .receipt-item {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: var(--spacing-md);
+            align-items: center;
+            padding: var(--spacing-sm) 0;
+            font-size: 0.875rem;
+        }
+
+        .receipt-item-name {
+            font-weight: 500;
+            color: #1e293b;
+        }
+
+        .receipt-item-quantity {
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .receipt-item-price {
+            font-weight: 600;
+            color: #1e293b;
+            text-align: right;
+        }
+
+        .receipt-summary {
+            margin-top: var(--spacing-xl);
+            padding-top: var(--spacing-lg);
+            border-top: 2px solid #f1f5f9;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-sm) 0;
+            font-size: 0.875rem;
+        }
+
+        .summary-row.total {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: #667eea;
+            padding-top: var(--spacing-md);
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .summary-row.discount {
+            color: #10b981;
+        }
+
+        .summary-row.change {
+            color: #f59e0b;
+        }
+
+        .receipt-footer {
+            background: #f8fafc;
+            padding: var(--spacing-lg) var(--spacing-xl);
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .receipt-footer p {
+            color: #64748b;
+            font-size: 0.75rem;
+            margin: var(--spacing-xs) 0;
+        }
+
+        .receipt-actions {
+            padding: var(--spacing-xl);
+            display: flex;
+            gap: var(--spacing-md);
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .btn {
+            flex: 1;
+            padding: var(--spacing-md);
+            border: none;
+            border-radius: var(--radius-lg);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-xs);
+            font-size: 0.875rem;
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #64748b;
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .receipt-container {
+                box-shadow: none;
+                border-radius: 0;
+                max-width: none;
+                width: 100%;
+            }
+
+            .receipt-actions {
+                display: none !important;
+            }
+
+            .receipt-header {
+                background: #667eea !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+
+        /* Animation */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .receipt-container {
+            animation: slideIn 0.5s ease-out;
+        }
+
+        /* CSS Variables */
+        :root {
+            --spacing-xs: 0.25rem;
+            --spacing-sm: 0.5rem;
+            --spacing-md: 1rem;
+            --spacing-lg: 1.5rem;
+            --spacing-xl: 2rem;
+            --spacing-2xl: 3rem;
+            --radius-lg: 0.5rem;
+            --radius-2xl: 1rem;
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --transition-fast: 150ms ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container">
+        <!-- Receipt Header -->
+        <div class="receipt-header">
+            <div class="receipt-logo">
+                <i data-lucide="package" style="width: 30px; height: 30px;"></i>
+            </div>
+            <h1 class="receipt-title">Ellar Store</h1>
+            <p class="receipt-subtitle">Transaction Receipt</p>
+            <div class="receipt-meta">
+                <span>ID: {{ transaction.transaction_id }}</span>
+                <span>{{ transaction.created_at|date:"M d, Y H:i" }}</span>
+            </div>
+        </div>
+
+        <!-- Receipt Body -->
+        <div class="receipt-body">
+            <!-- Transaction Info -->
+            <div class="receipt-info">
+                <div class="receipt-row">
+                    <span class="receipt-label">Transaction ID</span>
+                    <span class="receipt-value">#{{ transaction.transaction_id }}</span>
+                </div>
+                <div class="receipt-row">
+                    <span class="receipt-label">Date & Time</span>
+                    <span class="receipt-value">{{ transaction.created_at|date:"M d, Y H:i" }}</span>
+                </div>
+                <div class="receipt-row">
+                    <span class="receipt-label">Cashier</span>
+                    <span class="receipt-value">{{ transaction.cashier.username|default:"System" }}</span>
+                </div>
+            </div>
+
+            <!-- Items List -->
+            <div class="receipt-items">
+                {% for item in items %}
+                    <div class="receipt-item">
+                        <span class="receipt-item-name">{{ item.product.name }}</span>
+                        <span class="receipt-item-quantity">×{{ item.quantity }}</span>
+                        <span class="receipt-item-price">₱{{ item.subtotal }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <!-- Summary -->
+            <div class="receipt-summary">
+                <div class="summary-row">
+                    <span>Subtotal</span>
+                    <span>₱{{ transaction.subtotal }}</span>
+                </div>
+                {% if transaction.discount %}
+                    <div class="summary-row discount">
+                        <span>Discount</span>
+                        <span>-₱{{ transaction.discount }}</span>
+                    </div>
+                {% endif %}
+                <div class="summary-row">
+                    <span>Total Items</span>
+                    <span>{{ transaction.get_total_items }}</span>
+                </div>
+                <div class="summary-row total">
+                    <span>Total</span>
+                    <span>₱{{ transaction.total_amount }}</span>
+                </div>
+                {% if transaction.cash_received %}
+                    <div class="summary-row">
+                        <span>Cash Received</span>
+                        <span>₱{{ transaction.cash_received }}</span>
+                    </div>
+                    <div class="summary-row change">
+                        <span>Change</span>
+                        <span>₱{{ transaction.change }}</span>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Receipt Footer -->
+        <div class="receipt-footer">
+            <p>Thank you for shopping at Ellar Store!</p>
+            <p>Please come again soon</p>
+            <p style="margin-top: var(--spacing-md); font-size: 0.625rem; opacity: 0.7;">
+                This is a computer-generated receipt. No signature required.
+            </p>
+        </div>
+
+        <!-- Receipt Actions -->
+        <div class="receipt-actions">
+            <button class="btn btn-secondary" onclick="window.close()">
+                <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+                Close
+            </button>
+            <button class="btn btn-primary" onclick="printReceipt()">
+                <i data-lucide="printer" style="width: 16px; height: 16px;"></i>
+                Print Receipt
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Print receipt function
+        function printReceipt() {
+            window.print();
+        }
+
+        // Save receipt function
+        function saveReceipt() {
+            // Create a temporary element to hold the receipt content
+            const receiptContent = document.querySelector('.receipt-container').innerHTML;
+            const blob = new Blob([`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Receipt - {{ transaction.transaction_id }}</title>
+                    <style>
+                        body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; }
+                        .receipt-container { background: white; max-width: 400px; margin: 0 auto; padding: 20px; }
+                        .receipt-header { text-align: center; margin-bottom: 20px; }
+                        .receipt-title { font-size: 1.5rem; font-weight: 700; margin: 10px 0; }
+                        .receipt-item { display: flex; justify-content: space-between; margin: 10px 0; }
+                        .summary-row { display: flex; justify-content: space-between; margin: 10px 0; }
+                        .total { font-weight: bold; font-size: 1.1rem; }
+                    </style>
+                </head>
+                <body>
+                    <div class="receipt-container">
+                        ${receiptContent}
+                    </div>
+                </body>
+                </html>
+            `], { type: 'text/html' });
+            
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `receipt_{{ transaction.transaction_id }}.html`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Remove auto-print functionality since it's now in a modal
+        // window.addEventListener('load', function() {
+        //     setTimeout(() => {
+        //         window.print();
+        //     }, 1000);
+        // });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl/Cmd + P to print
+            if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+                e.preventDefault();
+                window.print();
+            }
+            
+            // Escape to close
+            if (e.key === 'Escape') {
+                window.close();
+            }
+        });
+
+        // Add print-specific styling
+        const printStyle = document.createElement('style');
+        printStyle.textContent = `
+            @media print {
+                .receipt-actions {
+                    display: none !important;
+                }
+            }
+        `;
+        document.head.appendChild(printStyle);
+    </script>
+</body>
+</html>

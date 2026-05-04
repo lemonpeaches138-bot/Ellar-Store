@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Ellar Store{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'styles.css' %}?v=pink">
+</head>
+<body>
+    <header class="site-header">
+        <h1>Ellar Mini Mart</h1>
+        {% if user.is_authenticated %}
+        <nav>
+            <a href="{% url 'inventory:dashboard' %}">Dashboard</a>
+            <a href="{% url 'inventory:pos' %}">POS</a>
+            <a href="{% url 'inventory:product-list' %}">Products</a>
+            <a href="{% url 'inventory:reports' %}">Reports</a>
+            <a href="{% url 'inventory:admin-profile' %}">Admin</a>
+            <div class="user-section">
+                <span class="user-name">{{ user.username }}</span>
+                <a href="{% url 'inventory:logout' %}" class="logout-btn">Logout</a>
+            </div>
+        </nav>
+        {% endif %}
+    </header>
+
+    <main class="container">
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li class="message {{ message.tags }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

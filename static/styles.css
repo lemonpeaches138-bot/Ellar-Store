@@ -1,0 +1,161 @@
+:root {
+    --bg: #fff7fb;
+    --surface: #ffffff;
+    --ink: #421527;
+    --muted: #6d5360;
+    --line: #ead3df;
+    --brand: #d63384;
+    --brand-strong: #9d174d;
+    --warn: #bc6c25;
+    --danger: #9b2226;
+}
+
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, sans-serif;
+    background: radial-gradient(circle at top left, #ffe4f1, var(--bg));
+    color: var(--ink);
+}
+.site-header {
+    padding: 1.35rem 1.8rem;
+    background: var(--brand-strong);
+    color: white;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+.site-header h1 { margin: 0; font-size: 1.45rem; }
+nav { display: flex; gap: 1rem; align-items: center; }
+nav a { color: white; text-decoration: none; font-weight: 600; font-size: 1.05rem; }
+.container { max-width: 1200px; margin: 1.5rem auto; padding: 0 1rem; }
+.cards { display: grid; grid-template-columns: repeat(5, minmax(190px, 1fr)); gap: 1rem; }
+.card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 1.35rem;
+    box-shadow: 0 16px 35px rgba(157, 23, 77, 0.08);
+    position: relative;
+    overflow: hidden;
+}
+.card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(214, 51, 132, 0.14), transparent 55%);
+    pointer-events: none;
+}
+.card h2 {
+    margin-top: 0;
+    font-size: 0.95rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+    position: relative;
+    white-space: nowrap;
+}
+.card p {
+    margin-bottom: 0;
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: var(--brand-strong);
+    position: relative;
+    white-space: nowrap;
+}
+.card.warning { border-color: #efc793; }
+h2 { margin-top: 1.5rem; }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+}
+th, td { padding: 0.7rem; border-bottom: 1px solid var(--line); text-align: left; }
+.list-header { display: flex; justify-content: space-between; align-items: center; }
+.actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; }
+.report-card {
+    background: linear-gradient(135deg, #ffffff, #fff0f7);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 1.4rem;
+    box-shadow: 0 16px 35px rgba(157, 23, 77, 0.08);
+}
+.report-card h3 { margin-top: 0; color: var(--brand-strong); }
+.report-card p { color: var(--muted); }
+a { color: var(--brand); }
+.low { color: var(--danger); }
+.button {
+    display: inline-block;
+    background: var(--brand);
+    color: white;
+    padding: 0.45rem 0.8rem;
+    border-radius: 8px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+}
+.button.secondary { background: #6c757d; }
+.button.danger, a.danger { color: var(--danger); }
+.form-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1rem;
+}
+.form-card p { display: grid; gap: 0.4rem; }
+input, textarea, select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #e2b8cc;
+    border-radius: 8px;
+}
+.messages { list-style: none; padding: 0; }
+.message {
+    background: #fff0f7;
+    border: 1px solid #f3b6d3;
+    padding: 0.6rem;
+    border-radius: 8px;
+}
+
+.user-section {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-left: auto;
+}
+
+.user-name {
+    color: white;
+    font-weight: 500;
+}
+
+.logout-btn {
+    display: inline-block;
+    background: #d63384;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: background 0.3s;
+}
+
+.logout-btn:hover {
+    background: #bc1f5f;
+}
+@media (max-width: 700px) {
+    .cards { grid-template-columns: 1fr; }
+    th:nth-child(5), td:nth-child(5) { display: none; }
+}
+
+@media print {
+    .site-header, .print-actions { display: none; }
+    body { background: white; }
+    .container { max-width: none; margin: 0; padding: 0; }
+    table { box-shadow: none; }
+}

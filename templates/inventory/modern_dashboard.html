@@ -1,0 +1,414 @@
+{% extends 'modern_base.html' %}
+
+{% block title %}Dashboard | Ellar Store{% endblock %}
+
+{% block content %}
+<!-- Hidden data for charts -->
+<script id="categoryData" type="application/json">{{ product_type_counts|safe }}</script>
+
+<!-- Dashboard Overview -->
+<section class="dashboard-overview">
+    <div class="kpi-card primary">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Total Products</div>
+                <div class="kpi-value" data-value="{{ product_count }}">{{ product_count }}</div>
+                <div class="kpi-change positive">
+                    <i data-lucide="trending-up" style="width: 16px; height: 16px;"></i>
+                    <span>+12% from last month</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="package-2"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card warning">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Low Stock Items</div>
+                <div class="kpi-value" data-value="{{ low_stock_count }}">{{ low_stock_count }}</div>
+                <div class="kpi-change negative">
+                    <i data-lucide="alert-triangle" style="width: 16px; height: 16px;"></i>
+                    <span>Requires attention</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="alert-circle"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card success">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Total Selling Value</div>
+                <div class="kpi-value" data-value="{{ total_stock_value|floatformat:0 }}">{{ total_stock_value|floatformat:0 }}</div>
+                <div class="kpi-change positive">
+                    <i data-lucide="trending-up" style="width: 16px; height: 16px;"></i>
+                    <span>+8% from last month</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="dollar-sign"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card purple">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Total Purchase Value</div>
+                <div class="kpi-value" data-value="{{ total_cost_value|floatformat:0 }}">{{ total_cost_value|floatformat:0 }}</div>
+                <div class="kpi-change positive">
+                    <i data-lucide="trending-up" style="width: 16px; height: 16px;"></i>
+                    <span>+5% from last month</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="trending-down"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card success">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Expected Profit</div>
+                <div class="kpi-value" data-value="{{ total_expected_profit|floatformat:0 }}">{{ total_expected_profit|floatformat:0 }}</div>
+                <div class="kpi-change positive">
+                    <i data-lucide="trending-up" style="width: 16px; height: 16px;"></i>
+                    <span>+15% from last month</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="trending-up"></i>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Charts Section -->
+<div class="dashboard-grid dashboard-charts">
+    <!-- Stock Trends Chart -->
+    <div class="modern-table-container">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Stock Trends</h3>
+            <div class="table-actions">
+                <button class="btn btn-secondary" onclick="updateStockChart('week')">Week</button>
+                <button class="btn btn-primary" onclick="updateStockChart('month')">Month</button>
+                <button class="btn btn-secondary" onclick="updateStockChart('year')">Year</button>
+            </div>
+        </div>
+        <div class="chart-body chart-body-wide">
+            <canvas id="stockTrendsChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Category Distribution -->
+    <div class="modern-table-container">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Category Distribution</h3>
+        </div>
+        <div class="chart-body">
+            <canvas id="categoryChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity & Analytics -->
+<div class="dashboard-grid dashboard-lower">
+    <!-- Recent Stock Movements -->
+    <div class="modern-table-container">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Recent Stock Movements</h3>
+            <a href="{% url 'inventory:reports' %}" class="btn btn-secondary">View All</a>
+        </div>
+        <div style="max-height: 400px; overflow-y: auto;">
+            <table class="modern-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Product</th>
+                        <th>Type</th>
+                        <th>Quantity</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for movement in recent_movements %}
+                        <tr>
+                            <td>{{ movement.created_at|date:'M d, H:i' }}</td>
+                            <td>{{ movement.product.name|truncatechars:20 }}</td>
+                            <td>{{ movement.get_movement_type_display }}</td>
+                            <td>{{ movement.quantity }}</td>
+                            <td>
+                                {% if movement.movement_type == 'IN' %}
+                                    <span class="status-badge status-success">Stock In</span>
+                                {% else %}
+                                    <span class="status-badge status-warning">Stock Out</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" style="text-align: center; padding: var(--spacing-xl); color: var(--light-muted);">
+                                <i data-lucide="inbox" style="width: 48px; height: 48px; margin-bottom: var(--spacing-md); opacity: 0.5;"></i>
+                                <div>No stock movements yet</div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Analytics Overview -->
+    <div class="modern-table-container">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Analytics Overview</h3>
+        </div>
+        <div style="padding: var(--spacing-xl);">
+            <div style="display: grid; gap: var(--spacing-lg);">
+                <!-- Sales Performance -->
+                <div class="glass-card">
+                    <h4 style="margin-bottom: var(--spacing-md); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Sales Performance</h4>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-sm);">
+                        <span style="color: var(--light-muted);">Total Units Sold</span>
+                        <span style="font-weight: 700; font-size: 1.25rem;">{{ total_sold|default:0 }}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: var(--light-muted);">Products with Sales</span>
+                        <span style="font-weight: 600;">{{ products_with_sales|default:0 }}</span>
+                    </div>
+                </div>
+
+                <!-- Stock Movements -->
+                <div class="glass-card">
+                    <h4 style="margin-bottom: var(--spacing-md); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Stock Movements</h4>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-sm);">
+                        <span style="color: var(--light-muted);">Stock In</span>
+                        <span style="font-weight: 700; font-size: 1.25rem; color: #10b981;">{{ stock_in_count|default:0 }}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: var(--light-muted);">Stock Out</span>
+                        <span style="font-weight: 600; color: #f59e0b;">{{ stock_out_count|default:0 }}</span>
+                    </div>
+                </div>
+
+                <!-- Top Selling Products -->
+                <div class="glass-card">
+                    <h4 style="margin-bottom: var(--spacing-md); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Top Selling Products</h4>
+                    {% for product in top_selling_products %}
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-sm) 0; border-bottom: 1px solid var(--light-border);">
+                            <span style="color: var(--light-text);">{{ product.name|truncatechars:25 }}</span>
+                            <span style="font-weight: 600; color: #667eea;">{{ product.total_sold }} sold</span>
+                        </div>
+                    {% empty %}
+                        <div style="text-align: center; padding: var(--spacing-md); color: var(--light-muted);">
+                            No sales data available
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="dashboard-grid">
+    <div class="modern-table-container">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Quick Actions</h3>
+        </div>
+        <div style="padding: var(--spacing-xl); display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--spacing-lg);">
+            <a href="{% url 'inventory:product-add' %}" class="btn btn-primary" style="justify-content: center; padding: var(--spacing-lg);">
+                <i data-lucide="plus-circle" style="width: 20px; height: 20px;"></i>
+                Add Product
+            </a>
+            <a href="{% url 'inventory:pos' %}" class="btn btn-success" style="justify-content: center; padding: var(--spacing-lg); background: var(--success-gradient);">
+                <i data-lucide="shopping-cart" style="width: 20px; height: 20px;"></i>
+                New Sale
+            </a>
+            <a href="{% url 'inventory:product-list' %}" class="btn btn-secondary" style="justify-content: center; padding: var(--spacing-lg);">
+                <i data-lucide="package" style="width: 20px; height: 20px;"></i>
+                Manage Stock
+            </a>
+            <a href="{% url 'inventory:reports' %}" class="btn btn-secondary" style="justify-content: center; padding: var(--spacing-lg);">
+                <i data-lucide="file-text" style="width: 20px; height: 20px;"></i>
+                Generate Report
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Embed Django data as JSON for JavaScript -->
+<script type="application/json" id="stockTrendsData">{{ stock_trends_json|safe }}</script>
+<script type="application/json" id="productTypeCounts">{{ product_type_counts_json|safe }}</script>
+
+<script>
+    // Initialize Lucide icons for dynamic content
+    lucide.createIcons();
+    Chart.defaults.color = '#7f8aa3';
+    Chart.defaults.font.family = "'Inter', sans-serif";
+
+    // Stock Trends Chart
+    const stockCtx = document.getElementById('stockTrendsChart').getContext('2d');
+    // Get real stock trends data from JSON script tag
+    const stockTrendsDataElement = document.getElementById('stockTrendsData');
+    const stockTrendsData = JSON.parse(stockTrendsDataElement.textContent);
+    
+    const stockChart = new Chart(stockCtx, {
+        type: 'line',
+        data: {
+            labels: stockTrendsData.labels,
+            datasets: [{
+                label: 'Stock In',
+                data: stockTrendsData.stock_in,
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                fill: true
+            }, {
+                label: 'Stock Out',
+                data: stockTrendsData.stock_out,
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: '#7f8aa3',
+                        boxWidth: 42,
+                        boxHeight: 12
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#7f8aa3'
+                    },
+                    grid: {
+                        display: true,
+                        drawBorder: false,
+                        color: 'rgba(43, 58, 112, 0.45)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: '#7f8aa3'
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+
+    // Category Distribution Chart
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    // Get real product type counts from JSON script tag
+    const productTypeCountsElement = document.getElementById('productTypeCounts');
+    const categoryData = JSON.parse(productTypeCountsElement.textContent);
+
+    const categoryChart = new Chart(categoryCtx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(categoryData),
+            datasets: [{
+                data: Object.values(categoryData),
+                backgroundColor: [
+                    '#667eea',
+                    '#764ba2',
+                    '#f093fb',
+                    '#f5576c',
+                    '#13B497',
+                    '#59D4A4'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#7f8aa3',
+                        boxWidth: 42,
+                        padding: 14
+                    }
+                }
+            }
+        }
+    });
+
+    // Update Stock Chart Function
+    function updateStockChart(period) {
+        // Update button states
+        document.querySelectorAll('.table-actions .btn').forEach(btn => {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-secondary');
+        });
+        event.target.classList.remove('btn-secondary');
+        event.target.classList.add('btn-primary');
+
+        // For now, keep the current real data and just update the title
+        // In a future enhancement, we could fetch period-specific data via AJAX
+        stockChart.update();
+    }
+
+    // Add hover effects to KPI cards
+    document.querySelectorAll('.kpi-card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-8px) scale(1.02)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0) scale(1)';
+        });
+    });
+
+    // Animate numbers on page load
+    function animateValue(element, start, end, duration) {
+        const range = end - start;
+        const increment = range / (duration / 16);
+        let current = start;
+        
+        const timer = setInterval(() => {
+            current += increment;
+            if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+                element.textContent = end.toLocaleString();
+                clearInterval(timer);
+            } else {
+                element.textContent = Math.floor(current).toLocaleString();
+            }
+        }, 16);
+    }
+
+    // Animate KPI values on page load
+    window.addEventListener('load', () => {
+        document.querySelectorAll('.kpi-value').forEach(element => {
+            const value = element.dataset.value || element.textContent;
+            const numericValue = Number.parseInt(String(value).replace(/[^0-9-]/g, ''), 10);
+            if (!Number.isNaN(numericValue)) {
+                animateValue(element, 0, numericValue, 1000);
+            }
+        });
+    });
+</script>
+{% endblock %}

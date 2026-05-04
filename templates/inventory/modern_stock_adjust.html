@@ -1,0 +1,258 @@
+{% extends "modern_base.html" %}
+{% load static %}
+
+{% block title %}Adjust Stock - {{ product.name }} | Ellar Store{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-content">
+        <div class="page-title">
+            <h1 style="margin: 0; font-size: 1.875rem; font-weight: 700; color: var(--light-text);">
+                <i data-lucide="refresh-cw" style="width: 32px; height: 32px; margin-right: var(--spacing-md); vertical-align: middle;"></i>
+                Adjust Stock
+            </h1>
+            <p style="margin: var(--spacing-sm) 0 0 0; color: var(--light-muted); font-size: 1rem;">
+                Update stock quantity for <strong>{{ product.name }}</strong> ({{ product.sku }})
+            </p>
+        </div>
+        <div class="page-actions">
+            <a href="{% url 'inventory:product-list' %}" class="btn btn-secondary">
+                <i data-lucide="arrow-left" style="width: 16px; height: 16px;"></i>
+                Back to Products
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: var(--spacing-xl); max-width: 1000px;">
+    <!-- Product Info Card -->
+    <div class="modern-table-container">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.125rem; font-weight: 600;">Product Information</h3>
+        </div>
+        <div style="padding: var(--spacing-xl);">
+            <div style="display: grid; gap: var(--spacing-md);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--light-muted);">Product Name:</span>
+                    <span style="font-weight: 600;">{{ product.name }}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--light-muted);">SKU:</span>
+                    <span style="font-weight: 600;">{{ product.sku }}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--light-muted);">Current Stock:</span>
+                    <span style="font-weight: 700; font-size: 1.25rem; color: #667eea;">{{ product.quantity }} units</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--light-muted);">Reorder Level:</span>
+                    <span style="font-weight: 600;">{{ product.reorder_level }} units</span>
+                </div>
+                {% if product.quantity <= product.reorder_level %}
+                <div style="padding: var(--spacing-md); background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius-md); margin-top: var(--spacing-md);">
+                    <div style="display: flex; align-items: center; gap: var(--spacing-sm); color: #dc2626; font-size: 0.875rem;">
+                        <i data-lucide="alert-triangle" style="width: 16px; height: 16px;"></i>
+                        <span>Low stock - needs restocking</span>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock Adjustment Form -->
+    <div class="modern-table-container">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.125rem; font-weight: 600;">Stock Adjustment</h3>
+        </div>
+        <form method="post" style="padding: var(--spacing-xl);">
+            {% csrf_token %}
+            
+            <!-- Debug Information -->
+            {% if form.errors %}
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius-md); padding: var(--spacing-md); margin-bottom: var(--spacing-md);">
+                <div style="color: #dc2626; font-weight: 600; margin-bottom: var(--spacing-sm);">Form Errors:</div>
+                {% for field, errors in form.errors.items %}
+                    <div style="color: #dc2626; font-size: 0.875rem;">
+                        <strong>{{ field }}:</strong> {{ errors|join:", " }}
+                    </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if messages %}
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: var(--spacing-md); margin-bottom: var(--spacing-md);">
+                {% for message in messages %}
+                    <div style="color: #16a34a; font-size: 0.875rem;">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <div style="display: grid; gap: var(--spacing-lg);">
+                <div>
+                    <label style="display: block; margin-bottom: var(--spacing-sm); font-weight: 500; color: var(--light-muted);">
+                        Adjustment Type
+                    </label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md);">
+                        <label style="display: flex; align-items: center; padding: var(--spacing-md); border: 2px solid var(--light-border); border-radius: var(--radius-md); cursor: pointer; transition: all var(--transition-fast);">
+                            <input type="radio" name="movement_type" value="IN" {% if form.movement_type.value == 'IN' %}checked{% endif %} required>
+                            <span style="margin-left: var(--spacing-sm); font-weight: 500;">
+                                <i data-lucide="plus-circle" style="width: 16px; height: 16px; margin-right: var(--spacing-xs); vertical-align: middle;"></i>
+                                Stock In
+                            </span>
+                        </label>
+                        <label style="display: flex; align-items: center; padding: var(--spacing-md); border: 2px solid var(--light-border); border-radius: var(--radius-md); cursor: pointer; transition: all var(--transition-fast);">
+                            <input type="radio" name="movement_type" value="OUT" {% if form.movement_type.value == 'OUT' %}checked{% endif %} required>
+                            <span style="margin-left: var(--spacing-sm); font-weight: 500;">
+                                <i data-lucide="minus-circle" style="width: 16px; height: 16px; margin-right: var(--spacing-xs); vertical-align: middle;"></i>
+                                Stock Out
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="{{ form.quantity.id_for_label }}" style="display: block; margin-bottom: var(--spacing-sm); font-weight: 500; color: var(--light-muted);">
+                        Quantity
+                    </label>
+                    {{ form.quantity }}
+                    {% if form.quantity.errors %}
+                    <div style="margin-top: var(--spacing-xs); color: #dc2626; font-size: 0.875rem;">
+                        {% for error in form.quantity.errors %}
+                        <div>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="{{ form.note.id_for_label }}" style="display: block; margin-bottom: var(--spacing-sm); font-weight: 500; color: var(--light-muted);">
+                        Reason (Optional)
+                    </label>
+                    {{ form.note }}
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md); margin-top: var(--spacing-lg);">
+                    <button type="submit" class="btn btn-primary" style="padding: var(--spacing-lg); font-weight: 600;">
+                        <i data-lucide="check" style="width: 18px; height: 18px;"></i>
+                        Apply Adjustment
+                    </button>
+                    <a href="{% url 'inventory:product-list' %}" class="btn btn-secondary" style="padding: var(--spacing-lg); text-align: center; text-decoration: none;">
+                        <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+                        Cancel
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+/* Adjustment Type Radio Button Styling */
+input[type="radio"] {
+    margin: 0;
+}
+
+input[type="radio"]:checked + span {
+    color: #667eea;
+}
+
+label:has(input[type="radio"]:checked) {
+    border-color: #667eea !important;
+    background: #f0f4ff !important;
+}
+
+/* Form Input Styling */
+input[name="quantity"] {
+    width: 100%;
+    padding: var(--spacing-md);
+    border: 2px solid var(--light-border);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+}
+
+textarea[name="note"] {
+    width: 100%;
+    padding: var(--spacing-md);
+    border: 2px solid var(--light-border);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    min-height: 80px;
+    resize: vertical;
+}
+
+/* Page Header Styling */
+.page-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: var(--spacing-2xl) 0;
+    margin: calc(-1 * var(--spacing-xl)) calc(-1 * var(--spacing-xl)) var(--spacing-xl) calc(-1 * var(--spacing-xl));
+}
+
+.page-header-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--spacing-xl);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.page-actions .btn {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.page-actions .btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+@media (max-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .page-header-content {
+        flex-direction: column;
+        gap: var(--spacing-lg);
+        text-align: center;
+    }
+}
+</style>
+
+<script>
+// Initialize Lucide icons
+document.addEventListener('DOMContentLoaded', function() {
+    lucide.createIcons();
+    
+    // Add interactive styling to radio buttons
+    const radioLabels = document.querySelectorAll('label:has(input[type="radio"])');
+    radioLabels.forEach(label => {
+        label.addEventListener('click', function() {
+            // Remove active state from all labels
+            radioLabels.forEach(l => {
+                l.style.borderColor = 'var(--light-border)';
+                l.style.background = 'transparent';
+            });
+            
+            // Add active state to clicked label
+            if (this.querySelector('input[type="radio"]').checked) {
+                this.style.borderColor = '#667eea';
+                this.style.background = '#f0f4ff';
+            }
+        });
+    });
+    
+    // Set initial state for checked radio
+    const checkedRadio = document.querySelector('input[type="radio"]:checked');
+    if (checkedRadio) {
+        const label = checkedRadio.closest('label');
+        if (label) {
+            label.style.borderColor = '#667eea';
+            label.style.background = '#f0f4ff';
+        }
+    }
+});
+</script>
+{% endblock %}

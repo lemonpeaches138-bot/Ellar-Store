@@ -1,0 +1,323 @@
+{% extends "modern_base.html" %}
+
+{% block title %}Notifications - Ellar Store{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <!-- Notifications Header -->
+    <div class="modern-table-container">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: var(--spacing-sm);">
+                <i data-lucide="bell" style="width: 20px; height: 20px;"></i>
+                System Notifications
+            </h3>
+            <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
+                <span class="status-badge status-info">
+                    {{ unread_count }} Unread
+                </span>
+            </div>
+        </div>
+
+        <div style="padding: var(--spacing-xl);">
+            {% if notifications %}
+                <div class="notifications-list">
+                    {% for notification in notifications %}
+                    <div class="notification-item {% if not notification.is_read %}unread{% endif %}" 
+                         data-notification-id="{{ notification.id }}">
+                        <div class="notification-header">
+                            <div style="display: flex; align-items: center; gap: var(--spacing-md);">
+                                <div class="notification-icon {{ notification.type|lower }}">
+                                    {% if notification.type == 'STOCK_IN' %}
+                                        <i data-lucide="package-plus" style="width: 20px; height: 20px;"></i>
+                                    {% elif notification.type == 'STOCK_OUT' %}
+                                        <i data-lucide="package-minus" style="width: 20px; height: 20px;"></i>
+                                    {% elif notification.type == 'SALE' %}
+                                        <i data-lucide="shopping-cart" style="width: 20px; height: 20px;"></i>
+                                    {% elif notification.type == 'LOW_STOCK' %}
+                                        <i data-lucide="alert-triangle" style="width: 20px; height: 20px;"></i>
+                                    {% elif notification.type == 'USER_REGISTERED' %}
+                                        <i data-lucide="user-plus" style="width: 20px; height: 20px;"></i>
+                                    {% elif notification.type == 'USER_APPROVED' %}
+                                        <i data-lucide="user-check" style="width: 20px; height: 20px;"></i>
+                                    {% else %}
+                                        <i data-lucide="bell" style="width: 20px; height: 20px;"></i>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <h4 style="margin: 0 0 var(--spacing-xs) 0; font-size: 1rem; font-weight: 600;">
+                                        {{ notification.title }}
+                                    </h4>
+                                    <p style="margin: 0; color: var(--light-muted); font-size: 0.875rem;">
+                                        {{ notification.created_at|date:"M d, Y H:i" }}
+                                        {% if notification.created_by %}
+                                        • {{ notification.created_by.username }}
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="notification-status">
+                                {% if not notification.is_read %}
+                                    <span class="unread-dot"></span>
+                                {% endif %}
+                                <span class="status-badge status-{{ notification.type|lower }}">
+                                    {{ notification.get_type_display }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="notification-content">
+                            <p style="margin: 0; color: var(--light-text); line-height: 1.5;">
+                                {{ notification.message }}
+                            </p>
+                            
+                            {% if notification.product %}
+                            <div class="notification-details">
+                                <span class="detail-label">Product:</span>
+                                <span class="detail-value">{{ notification.product.name }}</span>
+                                {% if notification.quantity %}
+                                <span class="detail-label">Quantity:</span>
+                                <span class="detail-value">{{ notification.quantity }}</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            
+                            {% if notification.transaction %}
+                            <div class="notification-details">
+                                <span class="detail-label">Transaction:</span>
+                                <span class="detail-value">{{ notification.transaction.transaction_id }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="notification-actions">
+                            {% if not notification.is_read %}
+                            <button class="btn btn-secondary mark-read-btn" 
+                                    data-notification-id="{{ notification.id }}"
+                                    style="padding: var(--spacing-sm) var(--spacing-lg); font-size: 0.875rem;">
+                                <i data-lucide="check" style="width: 16px; height: 16px; margin-right: var(--spacing-xs);"></i>
+                                Mark as Read
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <div style="width: 80px; height: 80px; border-radius: 50%; background: var(--success-gradient); display: flex; align-items: center; justify-content: center; margin: 0 auto var(--spacing-lg);">
+                        <i data-lucide="bell-off" style="width: 40px; height: 40px; color: white;"></i>
+                    </div>
+                    <h3 style="margin: 0 0 var(--spacing-sm) 0; font-size: 1.25rem; font-weight: 600;">No Notifications</h3>
+                    <p style="margin: 0; color: var(--light-muted); text-align: center;">
+                        No system notifications at this time. Check back later for updates.
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+/* Notifications Styles */
+.notifications-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.notification-item {
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-2xl);
+    padding: var(--spacing-xl);
+    transition: all var(--transition-fast);
+}
+
+.notification-item.unread {
+    border-color: var(--primary-color);
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.notification-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.notification-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.notification-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.notification-icon.stock_in {
+    background: var(--success-gradient);
+}
+
+.notification-icon.stock_out {
+    background: var(--warning-gradient);
+}
+
+.notification-icon.sale {
+    background: var(--info-gradient);
+}
+
+.notification-icon.low_stock {
+    background: var(--danger-gradient);
+}
+
+.notification-icon.user_registered {
+    background: var(--primary-gradient);
+}
+
+.notification-icon.user_approved {
+    background: var(--success-gradient);
+}
+
+.notification-status {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    align-items: flex-end;
+}
+
+.unread-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.notification-content {
+    margin-bottom: var(--spacing-lg);
+}
+
+.notification-details {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--light-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+}
+
+.detail-label {
+    font-weight: 500;
+    color: var(--light-muted);
+    font-size: 0.875rem;
+}
+
+.detail-value {
+    color: var(--light-text);
+    font-size: 0.875rem;
+    font-family: 'Courier New', monospace;
+}
+
+.notification-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: flex-end;
+}
+
+.empty-state {
+    text-align: center;
+    padding: var(--spacing-2xl);
+    color: var(--light-muted);
+}
+
+@media (max-width: 768px) {
+    .notification-header {
+        flex-direction: column;
+        gap: var(--spacing-md);
+        align-items: flex-start;
+    }
+    
+    .notification-status {
+        align-items: flex-start;
+        flex-direction: row;
+        gap: var(--spacing-sm);
+    }
+    
+    .notification-actions {
+        flex-direction: column;
+    }
+    
+    .notification-actions button {
+        width: 100%;
+    }
+}
+</style>
+
+<script>
+// Initialize Lucide icons
+document.addEventListener('DOMContentLoaded', function() {
+    lucide.createIcons();
+    
+    // Handle mark as read buttons
+    document.querySelectorAll('.mark-read-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const notificationId = this.dataset.notificationId;
+            const notificationItem = this.closest('.notification-item');
+            
+            fetch(`/mark-notification-read/${notificationId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    notificationItem.classList.remove('unread');
+                    const unreadDot = notificationItem.querySelector('.unread-dot');
+                    if (unreadDot) unreadDot.remove();
+                    this.remove();
+                    
+                    // Update unread count
+                    const unreadCount = document.querySelector('.status-badge.status-info');
+                    if (unreadCount) {
+                        const currentCount = parseInt(unreadCount.textContent);
+                        unreadCount.textContent = `${currentCount - 1} Unread`;
+                    }
+                }
+            })
+            .catch(error => console.error('Error marking notification as read:', error));
+        });
+    });
+});
+
+// Helper function to get CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

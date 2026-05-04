@@ -1,0 +1,394 @@
+{% extends 'modern_base.html' %}
+
+{% block title %}Products | Ellar Store{% endblock %}
+
+{% block content %}
+<!-- Sales Overview Cards -->
+<div class="dashboard-grid">
+    <div class="kpi-card primary">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Total Products</div>
+                <div class="kpi-value">{{ products.count }}</div>
+                <div class="kpi-change positive">
+                    <i data-lucide="package-2" style="width: 16px; height: 16px;"></i>
+                    <span>Active inventory</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="package"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card success">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Total Sold</div>
+                <div class="kpi-value">{{ total_sold|default:0 }}</div>
+                <div class="kpi-change positive">
+                    <i data-lucide="trending-up" style="width: 16px; height: 16px;"></i>
+                    <span>Lifetime sales</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="shopping-cart"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card warning">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Low Stock Items</div>
+                <div class="kpi-value">{{ low_stock_count|default:0 }}</div>
+                <div class="kpi-change negative">
+                    <i data-lucide="alert-triangle" style="width: 16px; height: 16px;"></i>
+                    <span>Needs restocking</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="alert-circle"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Top Seller</div>
+                <div class="kpi-value" style="font-size: 1.2rem;">{{ top_selling_product.name|default:"None"|truncatechars:15 }}</div>
+                {% if top_selling_product %}
+                <div class="kpi-change positive">
+                    <i data-lucide="award" style="width: 16px; height: 16px;"></i>
+                    <span>{{ top_selling_product.total_sold }} sold</span>
+                </div>
+                {% endif %}
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="trophy"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters and Search -->
+<div class="modern-table-container">
+    <div class="table-header">
+        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Product Inventory</h3>
+        <div class="table-actions">
+            <form method="get" style="display: flex; gap: var(--spacing-md); align-items: center;">
+                <select name="type" class="btn btn-secondary" style="padding: var(--spacing-sm) var(--spacing-md);">
+                    <option value="">All Categories</option>
+                    {% for value, label in product_types %}
+                        <option value="{{ value }}" {% if selected_product_type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary">Filter</button>
+                <a href="{% url 'inventory:product-list' %}" class="btn btn-secondary">Clear</a>
+            </form>
+            <a href="{% url 'inventory:product-add' %}" class="btn btn-primary">
+                <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+                Add Product
+            </a>
+        </div>
+    </div>
+
+    <!-- Search Bar -->
+    <div style="padding: var(--spacing-lg) var(--spacing-xl); border-bottom: 1px solid var(--light-border);">
+        <div style="position: relative;">
+            <i data-lucide="search" style="position: absolute; left: var(--spacing-md); top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--light-muted);"></i>
+            <input type="text" id="productSearch" placeholder="Search products by name, SKU, or type..." 
+                   style="width: 100%; padding: var(--spacing-md) var(--spacing-lg) var(--spacing-md) 2.5rem; border: 1px solid var(--light-border); border-radius: var(--radius-lg); background: var(--light-bg);">
+        </div>
+    </div>
+
+    <!-- Modern Table -->
+    <div style="overflow-x: auto;">
+        <table class="modern-table" id="productTable">
+            <thead>
+                <tr>
+                    <th style="width: 80px;">SKU</th>
+                    <th>Product Name</th>
+                    <th>Category</th>
+                    <th style="width: 100px;">Stock</th>
+                    <th style="width: 100px;">Sold</th>
+                    <th style="width: 120px;">Purchase Price</th>
+                    <th style="width: 120px;">Selling Price</th>
+                    <th style="width: 120px;">Profit/Unit</th>
+                    <th style="width: 120px;">Total Profit</th>
+                    <th style="width: 120px;">Expiration</th>
+                    <th style="width: 150px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                    <tr class="product-row" data-name="{{ product.name|lower }}" data-sku="{{ product.sku|lower }}" data-type="{{ product.get_product_type_display|lower }}">
+                        <td><strong>{{ product.sku }}</strong></td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
+                                <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.75rem;">
+                                    {{ product.name|first|upper }}
+                                </div>
+                                <div>
+                                    <div style="font-weight: 600;">{{ product.name }}</div>
+                                    {% if product.quantity <= product.reorder_level %}
+                                        <div style="font-size: 0.75rem; color: #ef4444;">⚠ Low stock</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="status-badge status-success">{{ product.get_product_type_display }}</span>
+                        </td>
+                        <td>
+                            {% if product.quantity <= product.reorder_level %}
+                                <span class="status-badge status-danger">{{ product.quantity }}</span>
+                            {% elif product.quantity <= product.reorder_level|add:product.reorder_level %}
+                                <span class="status-badge status-warning">{{ product.quantity }}</span>
+                            {% else %}
+                                <span class="status-badge status-success">{{ product.quantity }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if product.total_sold > 0 %}
+                                {% if product.total_sold >= 50 %}
+                                    <span style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 600;">{{ product.total_sold }}</span>
+                                {% elif product.total_sold >= 20 %}
+                                    <span style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 600;">{{ product.total_sold }}</span>
+                                {% else %}
+                                    <span style="background: rgba(59, 130, 246, 0.1); color: #3b82f6; padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 600;">{{ product.total_sold }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span style="color: var(--light-muted); font-style: italic;">0</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-weight: 500;">₱{{ product.purchase_price }}</td>
+                        <td style="font-weight: 600; color: #10b981;">₱{{ product.unit_price }}</td>
+                        <td style="font-weight: 600; color: #667eea;">₱{{ product.profit_per_unit }}</td>
+                        <td style="font-weight: 600; color: #667eea;">₱{{ product.total_profit }}</td>
+                        <td>
+                            {% if product.expiration_date %}
+                                {% with days_until_expiry=product.expiration_date|timeuntil %}
+                                    {% if "days" in days_until_expiry %}
+                                        <span class="status-badge status-warning">{{ product.expiration_date|date:'M d' }}</span>
+                                    {% else %}
+                                        <span class="status-badge status-success">{{ product.expiration_date|date:'M d' }}</span>
+                                    {% endif %}
+                                {% endwith %}
+                            {% else %}
+                                <span style="color: var(--light-muted); font-size: 0.875rem;">No expiry</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div style="display: flex; gap: var(--spacing-xs); flex-wrap: wrap;">
+                                <a href="{% url 'inventory:product-edit' product.pk %}" class="btn btn-secondary" style="padding: var(--spacing-xs) var(--spacing-sm); font-size: 0.75rem;">
+                                    <i data-lucide="edit" style="width: 14px; height: 14px;"></i>
+                                    Edit
+                                </a>
+                                <a href="{% url 'inventory:stock-adjust' product.pk %}" class="btn btn-secondary" style="padding: var(--spacing-xs) var(--spacing-sm); font-size: 0.75rem;">
+                                    <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
+                                    Stock
+                                </a>
+                                <a href="{% url 'inventory:product-delete' product.pk %}" class="btn btn-secondary" style="padding: var(--spacing-xs) var(--spacing-sm); font-size: 0.75rem; color: #ef4444; border-color: #ef4444;">
+                                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                                    Delete
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="11" style="text-align: center; padding: var(--spacing-2xl);">
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: var(--spacing-lg);">
+                                <i data-lucide="inbox" style="width: 64px; height: 64px; color: var(--light-muted); opacity: 0.5;"></i>
+                                <div>
+                                    <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: var(--spacing-sm);">No products found</div>
+                                    <div style="color: var(--light-muted);">Start by adding your first product to the inventory</div>
+                                    <a href="{% url 'inventory:product-add' %}" class="btn btn-primary" style="margin-top: var(--spacing-lg);">
+                                        <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+                                        Add Your First Product
+                                    </a>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Bulk Actions (hidden by default, shown when items are selected) -->
+<div class="modern-table-container" id="bulkActions" style="display: none; margin-top: var(--spacing-lg);">
+    <div class="table-header">
+        <h3 style="margin: 0; font-size: 1.125rem; font-weight: 600;">Bulk Actions</h3>
+        <div class="table-actions">
+            <span id="selectedCount" style="margin-right: var(--spacing-lg); color: var(--light-muted);">0 items selected</span>
+            <button class="btn btn-secondary" onclick="bulkExport()">Export CSV</button>
+            <button class="btn btn-secondary" onclick="bulkDelete()">Delete Selected</button>
+            <button class="btn btn-secondary" onclick="clearSelection()">Clear Selection</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Search functionality
+    const searchInput = document.getElementById('productSearch');
+    const productRows = document.querySelectorAll('.product-row');
+
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        
+        productRows.forEach(row => {
+            const name = row.dataset.name;
+            const sku = row.dataset.sku;
+            const type = row.dataset.type;
+            
+            if (name.includes(searchTerm) || sku.includes(searchTerm) || type.includes(searchTerm)) {
+                row.style.display = '';
+                // Add highlight animation
+                row.style.animation = 'pulse 0.3s ease';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+
+    // Add row hover effects
+    productRows.forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.transform = 'scale(1.01)';
+            this.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.transform = 'scale(1)';
+            this.style.boxShadow = 'none';
+        });
+    });
+
+    // Add pulse animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0% { background-color: transparent; }
+            50% { background-color: rgba(102, 126, 234, 0.1); }
+            100% { background-color: transparent; }
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Bulk selection functionality
+    let selectedRows = new Set();
+
+    function toggleRowSelection(row) {
+        const checkbox = row.querySelector('input[type="checkbox"]');
+        if (checkbox) {
+            if (checkbox.checked) {
+                selectedRows.add(row);
+                row.style.backgroundColor = 'rgba(102, 126, 234, 0.05)';
+            } else {
+                selectedRows.delete(row);
+                row.style.backgroundColor = '';
+            }
+            updateBulkActions();
+        }
+    }
+
+    function updateBulkActions() {
+        const bulkActions = document.getElementById('bulkActions');
+        const selectedCount = document.getElementById('selectedCount');
+        
+        if (selectedRows.size > 0) {
+            bulkActions.style.display = 'block';
+            selectedCount.textContent = `${selectedRows.size} item${selectedRows.size > 1 ? 's' : ''} selected`;
+        } else {
+            bulkActions.style.display = 'none';
+        }
+    }
+
+    function clearSelection() {
+        selectedRows.forEach(row => {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.checked = false;
+                row.style.backgroundColor = '';
+            }
+        });
+        selectedRows.clear();
+        updateBulkActions();
+    }
+
+    function bulkExport() {
+        // Implementation for bulk export
+        console.log('Exporting selected items:', selectedRows.size);
+    }
+
+    function bulkDelete() {
+        if (confirm(`Are you sure you want to delete ${selectedRows.size} item(s)?`)) {
+            // Implementation for bulk delete
+            console.log('Deleting selected items:', selectedRows.size);
+        }
+    }
+
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl/Cmd + K for search focus
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            searchInput.focus();
+        }
+        
+        // Escape to clear search
+        if (e.key === 'Escape') {
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input'));
+        }
+    });
+
+    // Add sorting functionality
+    let sortOrder = {};
+    
+    function sortTable(columnIndex) {
+        const table = document.getElementById('productTable');
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        
+        // Toggle sort order
+        sortOrder[columnIndex] = sortOrder[columnIndex] === 'asc' ? 'desc' : 'asc';
+        
+        rows.sort((a, b) => {
+            const aValue = a.cells[columnIndex].textContent.trim();
+            const bValue = b.cells[columnIndex].textContent.trim();
+            
+            // Try to parse as numbers
+            const aNum = parseFloat(aValue.replace(/[^0-9.-]/g, ''));
+            const bNum = parseFloat(bValue.replace(/[^0-9.-]/g, ''));
+            
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+                return sortOrder[columnIndex] === 'asc' ? aNum - bNum : bNum - aNum;
+            }
+            
+            // Sort as strings
+            return sortOrder[columnIndex] === 'asc' 
+                ? aValue.localeCompare(bValue)
+                : bValue.localeCompare(aValue);
+        });
+        
+        // Reorder rows
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
+    // Add click handlers to table headers for sorting
+    document.querySelectorAll('.modern-table th').forEach((header, index) => {
+        header.style.cursor = 'pointer';
+        header.addEventListener('click', () => sortTable(index));
+    });
+</script>
+{% endblock %}

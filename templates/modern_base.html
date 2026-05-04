@@ -1,0 +1,563 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Ellar Store - Modern Inventory Management{% endblock %}</title>
+    
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Modern Styles -->
+    <link rel="stylesheet" href="{% static 'modern-styles.css' %}">
+    
+    {% block extra_css %}
+<style>
+/* Notification Styles */
+.notification-wrapper {
+    position: relative;
+}
+
+.notification-btn {
+    position: relative;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.notification-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.notification-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #ef4444;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.notification-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: var(--spacing-sm);
+    width: 350px;
+    max-height: 400px;
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--light-border);
+    overflow: hidden;
+    display: none;
+    z-index: 1000;
+}
+
+.notification-dropdown.show {
+    display: block;
+    animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.notification-dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--light-border);
+    background: var(--light-bg);
+}
+
+.notification-dropdown-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--light-text);
+}
+
+.view-all-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.view-all-link:hover {
+    text-decoration: underline;
+}
+
+.notification-dropdown-content {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.loading-notifications {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-lg);
+    color: var(--light-muted);
+    font-size: 0.875rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+    .notification-dropdown {
+        width: 300px;
+        right: -50px;
+    }
+}
+</style>
+{% endblock %}
+</head>
+<body class="dark-mode">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <i data-lucide="package"></i>
+                <span>Ellar Store</span>
+            </div>
+        </div>
+        
+        <nav class="sidebar-nav">
+            {% if user.is_authenticated %}
+                <a href="{% url 'inventory:dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    <i data-lucide="layout-dashboard" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                    Dashboard
+                </a>
+                <a href="{% url 'inventory:pos' %}" class="nav-item {% if request.resolver_match.url_name == 'pos' %}active{% endif %}">
+                    <i data-lucide="shopping-cart" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                    Point of Sale
+                </a>
+                <a href="{% url 'inventory:product-list' %}" class="nav-item {% if request.resolver_match.url_name == 'product-list' %}active{% endif %}">
+                    <i data-lucide="package-2" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                    Products
+                </a>
+                <a href="{% url 'inventory:reports' %}" class="nav-item {% if request.resolver_match.url_name == 'reports' %}active{% endif %}">
+                    <i data-lucide="bar-chart-3" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                    Reports
+                </a>
+                <a href="{% url 'inventory:admin-profile' %}" class="nav-item {% if request.resolver_match.url_name == 'admin-profile' %}active{% endif %}">
+                    <i data-lucide="settings" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                    Settings
+                </a>
+            {% endif %}
+        </nav>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Top Header -->
+        <header class="top-header">
+            <div class="header-left">
+                <button class="btn btn-secondary" id="menuToggle" style="display: none;">
+                    <i data-lucide="menu" style="width: 18px; height: 18px;"></i>
+                </button>
+            </div>
+            
+            <div class="header-actions">
+                <!-- Theme Toggle -->
+                <button class="theme-toggle" id="themeToggle">
+                    <i data-lucide="sun" style="width: 18px; height: 18px;"></i>
+                </button>
+                
+                <!-- Notifications (Admin Only) -->
+                {% if user.is_authenticated and user.username == 'EllarMiniMart' %}
+                <div class="notification-wrapper">
+                    <button class="notification-btn" id="notificationBtn">
+                        <i data-lucide="bell" style="width: 18px; height: 18px;"></i>
+                        <span class="notification-badge" id="notificationBadge">0</span>
+                    </button>
+                    <div class="notification-dropdown" id="notificationDropdown">
+                        <div class="notification-dropdown-header">
+                            <h4>Notifications</h4>
+                            <a href="{% url 'inventory:notifications' %}" class="view-all-link">View All</a>
+                        </div>
+                        <div class="notification-dropdown-content" id="notificationDropdownContent">
+                            <div class="loading-notifications">
+                                <i data-lucide="loader-2" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"></i>
+                                Loading...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- User Profile -->
+                {% if user.is_authenticated %}
+                    <div class="user-profile">
+                        <div class="user-avatar">
+                            {{ user.username|first|upper }}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </header>
+
+        <!-- Page Content -->
+        <div class="page-content">
+            {% if messages %}
+                <div class="toast-container">
+                    {% for message in messages %}
+                        <div class="toast">
+                            <i data-lucide="{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}x-circle{% elif message.tags == 'warning' %}alert-triangle{% else %}info{% endif %}" style="width: 20px; height: 20px;"></i>
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- JavaScript -->
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        if (window.Chart) {
+            Chart.defaults.color = '#9fb0d4';
+            Chart.defaults.borderColor = 'rgba(132, 146, 196, 0.18)';
+            Chart.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        }
+
+        // Theme Toggle
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+        const themeIcon = themeToggle.querySelector('i');
+
+        // Dark dashboard theme is the default. Keep a saved light preference if the user toggles it.
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        body.classList.toggle('dark-mode', savedTheme === 'dark');
+        themeIcon.setAttribute('data-lucide', savedTheme === 'dark' ? 'moon' : 'sun');
+
+        themeToggle.addEventListener('click', () => {
+            body.classList.toggle('dark-mode');
+            const isDark = body.classList.contains('dark-mode');
+            themeIcon.setAttribute('data-lucide', isDark ? 'moon' : 'sun');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            lucide.createIcons();
+        });
+
+        // Mobile Menu Toggle
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+
+        function checkMobile() {
+            if (window.innerWidth <= 768) {
+                menuToggle.style.display = 'flex';
+            } else {
+                menuToggle.style.display = 'none';
+                sidebar.classList.remove('active');
+            }
+        }
+
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('active');
+        });
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768 && 
+                !sidebar.contains(e.target) && 
+                !menuToggle.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+
+        // Auto-hide toast notifications
+        const toasts = document.querySelectorAll('.toast');
+        toasts.forEach((toast, index) => {
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 3000 + (index * 500));
+        });
+
+        // Automatic logout when user leaves the site
+        // Django template logic - only runs for authenticated staff
+        {% if user.is_authenticated and user.is_staff %}
+        let logoutTimer;
+
+        function resetLogoutTimer() {
+            clearTimeout(logoutTimer);
+            logoutTimer = setTimeout(() => {
+                // Auto logout after 25 minutes of inactivity (5 minutes before session expires)
+                window.location.href = "{% url 'inventory:logout' %}";
+            }, 25 * 60 * 1000); // 25 minutes in milliseconds
+        }
+
+        // Reset timer on user activity
+        document.addEventListener('mousemove', resetLogoutTimer);
+        document.addEventListener('keypress', resetLogoutTimer);
+        document.addEventListener('click', resetLogoutTimer);
+        document.addEventListener('scroll', resetLogoutTimer);
+
+        // Handle browser/tab close
+        window.addEventListener('beforeunload', function (e) {
+            // Send logout request when user closes browser/tab
+            navigator.sendBeacon("{% url 'inventory:logout' %}");
+        });
+
+        // Handle visibility change (user switches tabs)
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                // User switched to another tab - start countdown
+                logoutTimer = setTimeout(() => {
+                    window.location.href = "{% url 'inventory:logout' %}";
+                }, 5 * 60 * 1000); // 5 minutes when tab is not visible
+            } else {
+                // User returned to tab - reset timer
+                resetLogoutTimer();
+            }
+        });
+
+        // Initialize timer on page load
+        resetLogoutTimer();
+
+        // Show warning before auto logout
+        let warningTimer;
+        function showLogoutWarning() {
+            const warning = document.createElement('div');
+            warning.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #f59e0b;
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 10000;
+                font-weight: 500;
+            `;
+            warning.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i data-lucide="alert-circle" style="width: 20px; height: 20px;"></i>
+                    <span>You will be logged out in 5 minutes due to inactivity.</span>
+                </div>
+            `;
+            document.body.appendChild(warning);
+            lucide.createIcons();
+
+            // Remove warning after 10 seconds
+            setTimeout(() => {
+                if (warning.parentNode) {
+                    warning.remove();
+                }
+            }, 10000);
+        }
+
+        // Show warning 5 minutes before logout
+        warningTimer = setTimeout(showLogoutWarning, 20 * 60 * 1000); // 20 minutes
+        // End Django template logic for authenticated staff
+        {% endif %}
+
+        // Notification functionality (Admin Only)
+        // Django template logic - only runs for EllarMiniMart admin
+        {% if user.is_authenticated and user.username == 'EllarMiniMart' %}
+        const notificationBtn = document.getElementById('notificationBtn');
+        const notificationDropdown = document.getElementById('notificationDropdown');
+        const notificationBadge = document.getElementById('notificationBadge');
+        const notificationDropdownContent = document.getElementById('notificationDropdownContent');
+
+        // Toggle notification dropdown
+        if (notificationBtn) {
+            notificationBtn.addEventListener('click', function() {
+                const isOpen = notificationDropdown.classList.contains('show');
+                if (isOpen) {
+                    notificationDropdown.classList.remove('show');
+                } else {
+                    notificationDropdown.classList.add('show');
+                    loadNotifications();
+                }
+            });
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.notification-wrapper')) {
+                notificationDropdown.classList.remove('show');
+            }
+        });
+
+        // Load notifications
+        function loadNotifications() {
+            notificationDropdownContent.innerHTML = `
+                <div class="loading-notifications">
+                    <i data-lucide="loader-2" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"></i>
+                    Loading...
+                </div>
+            `;
+            lucide.createIcons();
+
+            fetch('/api/notifications/', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.notifications) {
+                    displayNotifications(data.notifications);
+                    updateNotificationBadge(data.unread_count);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading notifications:', error);
+                notificationDropdownContent.innerHTML = `
+                    <div style="padding: var(--spacing-lg); text-align: center; color: var(--light-muted);">
+                        Error loading notifications
+                    </div>
+                `;
+            });
+        }
+
+        // Display notifications in dropdown
+        function displayNotifications(notifications) {
+            if (notifications.length === 0) {
+                notificationDropdownContent.innerHTML = `
+                    <div style="padding: var(--spacing-lg); text-align: center; color: var(--light-muted);">
+                        No new notifications
+                    </div>
+                `;
+                return;
+            }
+
+            const html = notifications.slice(0, 5).map(notification => `
+                <div class="notification-dropdown-item ${notification.is_read ? 'read' : 'unread'}" 
+                     style="padding: var(--spacing-md); border-bottom: 1px solid var(--light-border); cursor: pointer;"
+                     onclick="markAsRead(${notification.id})">
+                    <div style="display: flex; align-items: start; gap: var(--spacing-sm);">
+                        <div style="width: 8px; height: 8px; border-radius: 50%; background: ${notification.is_read ? 'transparent' : 'var(--primary-color)'}; margin-top: 8px; flex-shrink: 0;"></div>
+                        <div style="flex: 1;">
+                            <div style="font-weight: ${notification.is_read ? '400' : '600'}; font-size: 0.875rem; margin-bottom: 2px;">
+                                ${notification.title}
+                            </div>
+                            <div style="color: var(--light-muted); font-size: 0.75rem; line-height: 1.3;">
+                                ${notification.message.substring(0, 80)}${notification.message.length > 80 ? '...' : ''}
+                            </div>
+                            <div style="color: var(--light-muted); font-size: 0.7rem; margin-top: 2px;">
+                                ${new Date(notification.created_at).toLocaleString()}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            notificationDropdownContent.innerHTML = html;
+        }
+
+        // Update notification badge
+        function updateNotificationBadge(count) {
+            if (count > 0) {
+                notificationBadge.textContent = count > 99 ? '99+' : count;
+                notificationBadge.style.display = 'block';
+            } else {
+                notificationBadge.style.display = 'none';
+            }
+        }
+
+        // Mark notification as read
+        window.markAsRead = function(notificationId) {
+            fetch(`/mark-notification-read/${notificationId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadNotifications(); // Reload notifications
+                }
+            })
+            .catch(error => console.error('Error marking notification as read:', error));
+        };
+
+        // Helper function to get CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Auto-refresh notifications every 30 seconds
+        setInterval(() => {
+            if (!notificationDropdown.classList.contains('show')) {
+                fetch('/api/notifications/', {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.unread_count !== undefined) {
+                        updateNotificationBadge(data.unread_count);
+                    }
+                })
+                .catch(error => console.error('Error refreshing notifications:', error));
+            }
+        }, 30000);
+        // End Django template logic for EllarMiniMart admin notifications
+        {% endif %}
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
