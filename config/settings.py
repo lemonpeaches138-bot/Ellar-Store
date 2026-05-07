@@ -39,7 +39,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    'corsheaders',
     "inventory",
 ]
 
@@ -122,4 +121,3 @@ LOGIN_REDIRECT_URL = "inventory:dashboard"
 SESSION_COOKIE_AGE = 1800  # 30 minutes in seconds
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-CORS_ALLOW_ALL_ORIGINS = True
