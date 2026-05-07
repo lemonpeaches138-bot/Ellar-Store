@@ -24,6 +24,8 @@ urlpatterns = [
     path("approve-user/<int:registration_id>/", views.approve_user, name="approve-user"),
     path("reject-user/<int:registration_id>/", views.reject_user, name="reject-user"),
     path("staff-list/", views.staff_list, name="staff-list"),
+    path("staff-list/<int:staff_id>/password/", views.staff_set_password, name="staff-set-password"),
+    path("staff-list/<int:staff_id>/remove/", views.staff_remove, name="staff-remove"),
     path("notifications/", views.notifications, name="notifications"),
     path("api/notifications/", views.api_notifications, name="api-notifications"),
     path("mark-notification-read/<int:notification_id>/", views.mark_notification_read, name="mark-notification-read"),
@@ -37,4 +39,8 @@ urlpatterns = [
     path("pos/apply-discount/", views.pos_apply_discount, name="pos-apply-discount"),
     path("pos/checkout/", views.pos_checkout, name="pos-checkout"),
     path("pos/receipt/<str:transaction_id>/", views.pos_receipt, name="pos-receipt"),
+    # Settings URLs
+    path("settings/", views.settings_view, name="settings"),
+    path("api/theme-config/", views.api_theme_config, name="api-theme-config"),
+    path("api/update-theme/", views.api_update_theme, name="api-update-theme"),
 ]

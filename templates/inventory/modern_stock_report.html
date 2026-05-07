@@ -8,7 +8,7 @@
         <div class="kpi-header">
             <div>
                 <div class="kpi-title">Total Movements</div>
-                <div class="kpi-value">{{ movements.count }}</div>
+                <div class="kpi-value">{{ total_movements }}</div>
                 <div class="kpi-change positive">
                     <i data-lucide="activity" style="width: 16px; height: 16px;"></i>
                     <span>All time</span>
@@ -24,7 +24,7 @@
         <div class="kpi-header">
             <div>
                 <div class="kpi-title">Stock In</div>
-                <div class="kpi-value">{{ movements|filter_movement_type:'IN'|length }}</div>
+                <div class="kpi-value">{{ stock_in_total }}</div>
                 <div class="kpi-change positive">
                     <i data-lucide="arrow-down-left" style="width: 16px; height: 16px;"></i>
                     <span>Items received</span>
@@ -40,7 +40,7 @@
         <div class="kpi-header">
             <div>
                 <div class="kpi-title">Stock Out</div>
-                <div class="kpi-value">{{ movements|filter_movement_type:'OUT'|length }}</div>
+                <div class="kpi-value">{{ stock_out_total }}</div>
                 <div class="kpi-change negative">
                     <i data-lucide="arrow-up-right" style="width: 16px; height: 16px;"></i>
                     <span>Items sold/used</span>
@@ -56,7 +56,7 @@
         <div class="kpi-header">
             <div>
                 <div class="kpi-title">Net Movement</div>
-                <div class="kpi-value">{{ movements|filter_movement_type:'IN'|length|add:movements|filter_movement_type:'OUT'|length|add:-1 }}</div>
+                <div class="kpi-value">{{ net_movement }}</div>
                 <div class="kpi-change positive">
                     <i data-lucide="bar-chart" style="width: 16px; height: 16px;"></i>
                     <span>Net change</span>

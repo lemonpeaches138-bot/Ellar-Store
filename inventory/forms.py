@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
-from .models import Product, StockMovement, UserRegistration
+from .models import Product, StockMovement, UserRegistration, UserProfile
 
 
 class ProductForm(forms.ModelForm):
@@ -48,7 +48,10 @@ class UserRegistrationForm(forms.ModelForm):
     
     class Meta:
         model = UserRegistration
-        fields = ['username', 'email', 'first_name', 'last_name', 'password']
+        fields = ['username', 'email', 'first_name', 'last_name', 'phone', 'location', 'branch', 'password']
+        widgets = {
+            'branch': forms.Select(attrs={'class': 'form-control'}),
+        }
     
     def clean_username(self):
         username = self.cleaned_data.get('username')
@@ -83,3 +86,61 @@ class UserRegistrationForm(forms.ModelForm):
         if commit:
             registration.save()
         return registration
+
+
+class UserProfileForm(forms.ModelForm):
+    """Form for editing user profile settings."""
+    class Meta:
+        model = User
+        fields = ['email', 'first_name', 'last_name']
+        widgets = {
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'first_name': forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+        }
+        help_texts = {
+            'email': 'Email can be changed',
+            'first_name': 'Read-only',
+            'last_name': 'Read-only',
+        }
+
+
+class ThemePreferenceForm(forms.ModelForm):
+    """Form for customizing theme preferences."""
+    class Meta:
+        model = UserProfile
+        fields = ['dark_mode', 'primary_color']
+        widgets = {
+            'dark_mode': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'primary_color': forms.Select(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'dark_mode': 'Enable Dark Mode',
+            'primary_color': 'Primary Color Theme',
+        }
+
+
+class PasswordChangeForm(forms.Form):
+    """Form for changing user password."""
+    old_password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        label='Current Password'
+    )
+    new_password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        label='New Password'
+    )
+    confirm_password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        label='Confirm New Password'
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        new_password = cleaned_data.get('new_password')
+        confirm_password = cleaned_data.get('confirm_password')
+        
+        if new_password and confirm_password and new_password != confirm_password:
+            raise forms.ValidationError("New passwords do not match.")
+        
+        return cleaned_data

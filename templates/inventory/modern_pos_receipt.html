@@ -13,7 +13,7 @@
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-    
+
     <style>
         * {
             margin: 0;
@@ -31,6 +31,13 @@
             padding: var(--spacing-lg);
         }
 
+        body.receipt-embedded {
+            display: block;
+            min-height: auto;
+            background: transparent;
+            padding: var(--spacing-lg);
+        }
+
         .receipt-container {
             background: white;
             border-radius: var(--radius-2xl);
@@ -44,6 +51,10 @@
             transform-origin: center;
         }
 
+        body.receipt-embedded .receipt-container {
+            transform: none;
+        }
+
         .receipt-container::before {
             content: '';
             position: absolute;
@@ -55,7 +66,7 @@
         }
 
         .receipt-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--primary-gradient);
             color: white;
             padding: var(--spacing-xl);
             text-align: center;
@@ -176,7 +187,7 @@
         .summary-row.total {
             font-size: 1.125rem;
             font-weight: 700;
-            color: #667eea;
+            color: var(--primary-color);
             padding-top: var(--spacing-md);
             border-top: 1px solid #e2e8f0;
         }
@@ -231,7 +242,7 @@
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 10px 25px var(--primary-color-shadow);
         }
 
         .btn-secondary {
@@ -263,7 +274,7 @@
             }
 
             .receipt-header {
-                background: #667eea !important;
+                background: var(--primary-color) !important;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
@@ -295,12 +306,24 @@
             --spacing-2xl: 3rem;
             --radius-lg: 0.5rem;
             --radius-2xl: 1rem;
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            {% if user.is_authenticated %}
+                {% with theme_config=user.profile.theme_config %}
+                    --primary-color: {{ theme_config.hex|default:"#ec4899" }};
+                    --primary-color-rgb: {{ theme_config.rgb|default:"236, 72, 153" }};
+                    --primary-color-shadow: rgba({{ theme_config.rgb|default:"236, 72, 153" }}, 0.28);
+                    --primary-gradient: {{ theme_config.gradient|default:"linear-gradient(135deg, #ec4899 0%, #f472b6 100%)" }};
+                {% endwith %}
+            {% else %}
+                --primary-color: #ec4899;
+                --primary-color-rgb: 236, 72, 153;
+                --primary-color-shadow: rgba(236, 72, 153, 0.28);
+                --primary-gradient: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+            {% endif %}
             --transition-fast: 150ms ease;
         }
     </style>
 </head>
-<body>
+<body class="{% if is_embedded %}receipt-embedded{% endif %}">
     <div class="receipt-container">
         <!-- Receipt Header -->
         <div class="receipt-header">
@@ -388,7 +411,7 @@
 
         <!-- Receipt Actions -->
         <div class="receipt-actions">
-            <button class="btn btn-secondary" onclick="window.close()">
+            <button class="btn btn-secondary" onclick="closeReceiptView()">
                 <i data-lucide="x" style="width: 16px; height: 16px;"></i>
                 Close
             </button>
@@ -406,6 +429,20 @@
         // Print receipt function
         function printReceipt() {
             window.print();
+        }
+
+        function closeReceiptView() {
+            if (window.parent && window.parent !== window && window.parent.closeReceiptModal) {
+                window.parent.closeReceiptModal();
+                return;
+            }
+
+            if (window.closeReceiptModal) {
+                window.closeReceiptModal();
+                return;
+            }
+
+            window.close();
         }
 
         // Save receipt function
@@ -462,7 +499,7 @@
             
             // Escape to close
             if (e.key === 'Escape') {
-                window.close();
+                closeReceiptView();
             }
         });
 

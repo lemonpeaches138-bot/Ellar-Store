@@ -123,7 +123,7 @@
             </thead>
             <tbody>
                 {% for product in products %}
-                    <tr class="product-row" data-name="{{ product.name|lower }}" data-sku="{{ product.sku|lower }}" data-type="{{ product.get_product_type_display|lower }}">
+                    <tr class="product-row" data-product-id="{{ product.pk }}" data-reorder-level="{{ product.reorder_level }}" data-name="{{ product.name|lower }}" data-sku="{{ product.sku|lower }}" data-type="{{ product.get_product_type_display|lower }}">
                         <td><strong>{{ product.sku }}</strong></td>
                         <td>
                             <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
@@ -141,7 +141,7 @@
                         <td>
                             <span class="status-badge status-success">{{ product.get_product_type_display }}</span>
                         </td>
-                        <td>
+                        <td class="product-stock-cell" data-stock-cell="{{ product.pk }}">
                             {% if product.quantity <= product.reorder_level %}
                                 <span class="status-badge status-danger">{{ product.quantity }}</span>
                             {% elif product.quantity <= product.reorder_level|add:product.reorder_level %}
@@ -186,14 +186,31 @@
                                     <i data-lucide="edit" style="width: 14px; height: 14px;"></i>
                                     Edit
                                 </a>
-                                <a href="{% url 'inventory:stock-adjust' product.pk %}" class="btn btn-secondary" style="padding: var(--spacing-xs) var(--spacing-sm); font-size: 0.75rem;">
+                                <button
+                                    type="button"
+                                    class="btn btn-secondary stock-adjust-btn"
+                                    data-stock-url="{% url 'inventory:stock-adjust' product.pk %}"
+                                    data-product-id="{{ product.pk }}"
+                                    data-product-name="{{ product.name }}"
+                                    data-product-sku="{{ product.sku }}"
+                                    data-current-stock="{{ product.quantity }}"
+                                    data-reorder-level="{{ product.reorder_level }}"
+                                    style="padding: var(--spacing-xs) var(--spacing-sm); font-size: 0.75rem;"
+                                >
                                     <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
                                     Stock
-                                </a>
-                                <a href="{% url 'inventory:product-delete' product.pk %}" class="btn btn-secondary" style="padding: var(--spacing-xs) var(--spacing-sm); font-size: 0.75rem; color: #ef4444; border-color: #ef4444;">
+                                </button>
+                                <button
+                                    type="button"
+                                    class="btn btn-secondary product-delete-btn"
+                                    data-delete-url="{% url 'inventory:product-delete' product.pk %}"
+                                    data-product-name="{{ product.name }}"
+                                    data-product-sku="{{ product.sku }}"
+                                    style="padding: var(--spacing-xs) var(--spacing-sm); font-size: 0.75rem; color: #ef4444; border-color: #ef4444;"
+                                >
                                     <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
                                     Delete
-                                </a>
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -219,6 +236,100 @@
     </div>
 </div>
 
+<div id="stockAdjustModal" class="stock-modal-overlay" aria-hidden="true">
+    <div class="stock-modal" role="dialog" aria-modal="true" aria-labelledby="stockAdjustTitle">
+        <div class="stock-modal-header">
+            <div>
+                <h3 id="stockAdjustTitle">Adjust Stock</h3>
+                <p id="stockAdjustSubtitle">Select stock movement and quantity.</p>
+            </div>
+            <button type="button" class="stock-modal-close" id="closeStockAdjustModal" aria-label="Close stock adjustment">
+                <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+            </button>
+        </div>
+
+        <div class="stock-modal-summary">
+            <div>
+                <span>Current Stock</span>
+                <strong id="stockAdjustCurrent">0 units</strong>
+            </div>
+            <div>
+                <span>Reorder Level</span>
+                <strong id="stockAdjustReorder">0 units</strong>
+            </div>
+        </div>
+
+        <form id="stockAdjustForm" method="post">
+            {% csrf_token %}
+            <div class="stock-field">
+                <label>Adjustment Type</label>
+                <div class="stock-choice-grid">
+                    <label class="stock-choice">
+                        <input type="radio" name="movement_type" value="IN" checked required>
+                        <span>
+                            <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i>
+                            Stock In
+                        </span>
+                    </label>
+                    <label class="stock-choice">
+                        <input type="radio" name="movement_type" value="OUT" required>
+                        <span>
+                            <i data-lucide="minus-circle" style="width: 16px; height: 16px;"></i>
+                            Stock Out
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="stock-field">
+                <label for="stockAdjustQuantity">Quantity</label>
+                <input type="number" id="stockAdjustQuantity" name="quantity" min="1" step="1" required>
+            </div>
+
+            <div class="stock-field">
+                <label for="stockAdjustNote">Reason</label>
+                <textarea id="stockAdjustNote" name="note" placeholder="Optional note"></textarea>
+            </div>
+
+            <div id="stockAdjustError" class="stock-modal-error" style="display: none;"></div>
+
+            <div class="stock-modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancelStockAdjust">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="submitStockAdjust">
+                    <i data-lucide="check" style="width: 16px; height: 16px;"></i>
+                    Apply Adjustment
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="deleteProductModal" class="delete-modal-overlay" aria-hidden="true">
+    <div class="delete-modal" role="dialog" aria-modal="true" aria-labelledby="deleteProductTitle">
+        <div class="delete-modal-icon">
+            <i data-lucide="trash-2" style="width: 24px; height: 24px;"></i>
+        </div>
+        <div class="delete-modal-copy">
+            <h3 id="deleteProductTitle">Delete product?</h3>
+            <p>
+                Remove <strong id="deleteProductName">this product</strong>
+                <span id="deleteProductSku"></span> from inventory.
+            </p>
+        </div>
+        <form id="deleteProductForm" method="post">
+            {% csrf_token %}
+            <div class="delete-modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancelProductDelete">
+                    No, Keep It
+                </button>
+                <button type="submit" class="btn btn-danger delete-confirm-btn">
+                    Yes, Delete
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Bulk Actions (hidden by default, shown when items are selected) -->
 <div class="modern-table-container" id="bulkActions" style="display: none; margin-top: var(--spacing-lg);">
     <div class="table-header">
@@ -231,12 +342,510 @@
         </div>
     </div>
 </div>
+
+<style>
+.product-delete-btn {
+    cursor: pointer;
+}
+
+.stock-adjust-btn {
+    cursor: pointer;
+}
+
+.stock-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-lg);
+    background: rgba(15, 23, 42, 0.62);
+    backdrop-filter: blur(6px);
+}
+
+.stock-modal-overlay.show {
+    display: flex;
+}
+
+.stock-modal {
+    width: min(520px, 100%);
+    padding: var(--spacing-xl);
+    border: 1px solid var(--theme-border);
+    border-radius: var(--radius-xl);
+    background: var(--theme-surface);
+    box-shadow: var(--shadow-xl);
+    animation: stockModalIn 180ms ease-out;
+}
+
+.stock-modal-header {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    align-items: flex-start;
+    margin-bottom: var(--spacing-lg);
+}
+
+.stock-modal-header h3 {
+    margin: 0;
+    color: var(--theme-text);
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.stock-modal-header p {
+    margin: var(--spacing-xs) 0 0;
+    color: var(--theme-muted);
+    line-height: 1.4;
+}
+
+.stock-modal-close {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--theme-text);
+    cursor: pointer;
+}
+
+.stock-modal-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+}
+
+.stock-modal-summary > div {
+    padding: var(--spacing-md);
+    border: 1px solid var(--theme-border);
+    border-radius: var(--radius-lg);
+    background: var(--theme-bg-soft);
+}
+
+.stock-modal-summary span {
+    display: block;
+    margin-bottom: var(--spacing-xs);
+    color: var(--theme-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.stock-modal-summary strong {
+    color: var(--theme-text);
+    font-size: 1.125rem;
+}
+
+.stock-field {
+    margin-bottom: var(--spacing-md);
+}
+
+.stock-field > label {
+    display: block;
+    margin-bottom: var(--spacing-sm);
+    color: var(--theme-muted);
+    font-size: 0.875rem;
+    font-weight: 650;
+}
+
+.stock-choice-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+}
+
+.stock-choice {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 0 var(--spacing-md);
+    border: 2px solid var(--theme-border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.stock-choice input {
+    margin: 0 var(--spacing-sm) 0 0;
+}
+
+.stock-choice span {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    color: var(--theme-text);
+    font-weight: 650;
+}
+
+.stock-choice:has(input:checked) {
+    border-color: var(--primary-color);
+    background: var(--primary-color-soft);
+}
+
+#stockAdjustQuantity,
+#stockAdjustNote {
+    width: 100%;
+    padding: var(--spacing-md);
+    border: 2px solid var(--theme-border);
+    border-radius: var(--radius-lg);
+    background: var(--theme-surface);
+    color: var(--theme-text);
+    font-size: 0.95rem;
+}
+
+#stockAdjustNote {
+    min-height: 86px;
+    resize: vertical;
+}
+
+.stock-modal-error {
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-md);
+    border: 1px solid rgba(220, 38, 38, 0.28);
+    border-radius: var(--radius-lg);
+    background: rgba(220, 38, 38, 0.08);
+    color: #dc2626;
+    font-size: 0.875rem;
+    font-weight: 650;
+}
+
+.stock-modal-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+    padding-top: var(--spacing-sm);
+}
+
+.stock-modal-actions .btn {
+    justify-content: center;
+}
+
+@keyframes stockModalIn {
+    from {
+        opacity: 0;
+        transform: scale(0.97) translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.delete-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-lg);
+    background: rgba(15, 23, 42, 0.62);
+    backdrop-filter: blur(6px);
+}
+
+.delete-modal-overlay.show {
+    display: flex;
+}
+
+.delete-modal {
+    width: min(420px, 100%);
+    padding: var(--spacing-xl);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    border-radius: var(--radius-xl);
+    background: var(--glass-bg);
+    box-shadow: var(--shadow-xl);
+    animation: deleteFlash 180ms ease-out;
+}
+
+.delete-modal-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--spacing-md);
+    border-radius: var(--radius-lg);
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.delete-modal-copy h3 {
+    margin: 0 0 var(--spacing-xs) 0;
+    color: var(--light-text);
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.delete-modal-copy p {
+    margin: 0 0 var(--spacing-lg) 0;
+    color: var(--light-muted);
+    line-height: 1.5;
+}
+
+.delete-modal-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+}
+
+.delete-modal-actions .btn {
+    justify-content: center;
+}
+
+.delete-confirm-btn {
+    background: var(--danger-gradient);
+}
+
+@keyframes deleteFlash {
+    0% {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+        box-shadow: 0 0 0 rgba(239, 68, 68, 0);
+    }
+    60% {
+        box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.08);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        box-shadow: var(--shadow-xl);
+    }
+}
+
+@media (max-width: 520px) {
+    .stock-modal-summary,
+    .stock-choice-grid,
+    .stock-modal-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .delete-modal-actions {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
     // Initialize Lucide icons
     lucide.createIcons();
+
+    const deleteModal = document.getElementById('deleteProductModal');
+    const deleteForm = document.getElementById('deleteProductForm');
+    const deleteProductName = document.getElementById('deleteProductName');
+    const deleteProductSku = document.getElementById('deleteProductSku');
+    const cancelProductDelete = document.getElementById('cancelProductDelete');
+    const stockModal = document.getElementById('stockAdjustModal');
+    const stockForm = document.getElementById('stockAdjustForm');
+    const stockAdjustTitle = document.getElementById('stockAdjustTitle');
+    const stockAdjustSubtitle = document.getElementById('stockAdjustSubtitle');
+    const stockAdjustCurrent = document.getElementById('stockAdjustCurrent');
+    const stockAdjustReorder = document.getElementById('stockAdjustReorder');
+    const stockAdjustQuantity = document.getElementById('stockAdjustQuantity');
+    const stockAdjustNote = document.getElementById('stockAdjustNote');
+    const stockAdjustError = document.getElementById('stockAdjustError');
+    const submitStockAdjust = document.getElementById('submitStockAdjust');
+    const cancelStockAdjust = document.getElementById('cancelStockAdjust');
+    const closeStockAdjustModal = document.getElementById('closeStockAdjustModal');
+    let activeStockButton = null;
+
+    function showStockError(message) {
+        stockAdjustError.textContent = message;
+        stockAdjustError.style.display = 'block';
+    }
+
+    function clearStockError() {
+        stockAdjustError.textContent = '';
+        stockAdjustError.style.display = 'none';
+    }
+
+    function openStockModal(button) {
+        activeStockButton = button;
+        const productName = button.dataset.productName || 'Product';
+        const productSku = button.dataset.productSku || '';
+        const currentStock = parseInt(button.dataset.currentStock, 10) || 0;
+        const reorderLevel = parseInt(button.dataset.reorderLevel, 10) || 0;
+
+        stockAdjustTitle.textContent = `Adjust ${productName}`;
+        stockAdjustSubtitle.textContent = productSku ? `SKU: ${productSku}` : 'Update stock quantity';
+        stockAdjustCurrent.textContent = `${currentStock} unit${currentStock === 1 ? '' : 's'}`;
+        stockAdjustReorder.textContent = `${reorderLevel} unit${reorderLevel === 1 ? '' : 's'}`;
+        stockForm.action = button.dataset.stockUrl;
+        stockForm.reset();
+        stockForm.querySelector('input[name="movement_type"][value="IN"]').checked = true;
+        stockAdjustQuantity.value = '';
+        stockAdjustNote.value = '';
+        clearStockError();
+        submitStockAdjust.disabled = false;
+        stockModal.classList.add('show');
+        stockModal.setAttribute('aria-hidden', 'false');
+        setTimeout(() => stockAdjustQuantity.focus(), 50);
+    }
+
+    function closeStockModal() {
+        stockModal.classList.remove('show');
+        stockModal.setAttribute('aria-hidden', 'true');
+        stockForm.removeAttribute('action');
+        activeStockButton = null;
+        clearStockError();
+    }
+
+    function getStockBadgeClass(quantity, reorderLevel) {
+        if (quantity <= reorderLevel) {
+            return 'status-danger';
+        }
+
+        if (quantity <= reorderLevel * 2) {
+            return 'status-warning';
+        }
+
+        return 'status-success';
+    }
+
+    function showProductToast(message) {
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container';
+            document.body.appendChild(toastContainer);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = `
+            <i data-lucide="check-circle" style="width: 20px; height: 20px;"></i>
+            <span></span>
+        `;
+        toast.querySelector('span').textContent = message;
+        toastContainer.appendChild(toast);
+        lucide.createIcons();
+
+        setTimeout(() => {
+            toast.style.animation = 'slideIn 0.3s ease reverse';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    document.querySelectorAll('.stock-adjust-btn').forEach(button => {
+        button.addEventListener('click', () => openStockModal(button));
+    });
+
+    cancelStockAdjust.addEventListener('click', closeStockModal);
+    closeStockAdjustModal.addEventListener('click', closeStockModal);
+
+    stockModal.addEventListener('click', event => {
+        if (event.target === stockModal) {
+            closeStockModal();
+        }
+    });
+
+    stockForm.addEventListener('submit', event => {
+        event.preventDefault();
+        clearStockError();
+
+        if (!activeStockButton) {
+            showStockError('Please choose a product first.');
+            return;
+        }
+
+        const formData = new FormData(stockForm);
+        const quantity = parseInt(formData.get('quantity'), 10) || 0;
+        const movementType = formData.get('movement_type');
+        const currentStock = parseInt(activeStockButton.dataset.currentStock, 10) || 0;
+
+        if (quantity <= 0) {
+            showStockError('Quantity must be greater than zero.');
+            return;
+        }
+
+        if (movementType === 'OUT' && quantity > currentStock) {
+            showStockError('Cannot stock out more than the current stock.');
+            return;
+        }
+
+        submitStockAdjust.disabled = true;
+
+        fetch(stockForm.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+            }
+        })
+        .then(async response => {
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Unable to update stock.');
+            }
+            return data;
+        })
+        .then(data => {
+            const newQuantity = parseInt(data.quantity, 10) || 0;
+            const productId = data.product_id || activeStockButton.dataset.productId;
+            const row = document.querySelector(`.product-row[data-product-id="${productId}"]`);
+            const reorderLevel = parseInt(activeStockButton.dataset.reorderLevel, 10) || 0;
+            const stockCell = document.querySelector(`.product-stock-cell[data-stock-cell="${productId}"]`);
+
+            activeStockButton.dataset.currentStock = newQuantity;
+            if (row) {
+                row.dataset.reorderLevel = reorderLevel;
+            }
+
+            if (stockCell) {
+                stockCell.innerHTML = `<span class="status-badge ${getStockBadgeClass(newQuantity, reorderLevel)}">${newQuantity}</span>`;
+            }
+
+            closeStockModal();
+            showProductToast(data.message || 'Stock updated successfully.');
+        })
+        .catch(error => {
+            showStockError(error.message);
+        })
+        .finally(() => {
+            submitStockAdjust.disabled = false;
+        });
+    });
+
+    function closeDeleteModal() {
+        deleteModal.classList.remove('show');
+        deleteModal.setAttribute('aria-hidden', 'true');
+        deleteForm.removeAttribute('action');
+    }
+
+    document.querySelectorAll('.product-delete-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            deleteProductName.textContent = button.dataset.productName || 'this product';
+            deleteProductSku.textContent = button.dataset.productSku ? `(${button.dataset.productSku})` : '';
+            deleteForm.action = button.dataset.deleteUrl;
+            deleteModal.classList.add('show');
+            deleteModal.setAttribute('aria-hidden', 'false');
+        });
+    });
+
+    cancelProductDelete.addEventListener('click', closeDeleteModal);
+
+    deleteModal.addEventListener('click', event => {
+        if (event.target === deleteModal) {
+            closeDeleteModal();
+        }
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && stockModal.classList.contains('show')) {
+            closeStockModal();
+            return;
+        }
+
+        if (event.key === 'Escape' && deleteModal.classList.contains('show')) {
+            closeDeleteModal();
+        }
+    });
 
     // Search functionality
     const searchInput = document.getElementById('productSearch');
@@ -347,6 +956,9 @@
         
         // Escape to clear search
         if (e.key === 'Escape') {
+            if (stockModal.classList.contains('show') || deleteModal.classList.contains('show')) {
+                return;
+            }
             searchInput.value = '';
             searchInput.dispatchEvent(new Event('input'));
         }

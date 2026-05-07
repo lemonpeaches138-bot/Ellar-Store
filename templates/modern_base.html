@@ -5,21 +5,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Ellar Store - Modern Inventory Management{% endblock %}</title>
-    
+
     <!-- Inter Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
+
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-    
+
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <!-- Modern Styles -->
     <link rel="stylesheet" href="{% static 'modern-styles.css' %}">
-    
+
+    {% if user.is_authenticated %}
+        {% with theme_config=user.profile.theme_config %}
+            <style id="server-theme-css">
+                :root {
+                    --primary-color: {{ theme_config.hex|default:"#ec4899" }};
+                    --primary-gradient: {{ theme_config.gradient|default:"linear-gradient(135deg, #ec4899 0%, #f472b6 100%)" }};
+                    --primary-color-rgb: {{ theme_config.rgb|default:"236, 72, 153" }};
+                    --primary-color-soft: rgba({{ theme_config.rgb|default:"236, 72, 153" }}, 0.18);
+                    --primary-color-shadow: rgba({{ theme_config.rgb|default:"236, 72, 153" }}, 0.28);
+                }
+            </style>
+        {% endwith %}
+    {% endif %}
+
     {% block extra_css %}
 <style>
 /* Notification Styles */
@@ -146,7 +160,7 @@
 </style>
 {% endblock %}
 </head>
-<body class="dark-mode">
+<body class="{% if user.is_authenticated and user.profile.dark_mode %}dark-mode{% endif %}">
     <!-- Sidebar Navigation -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -155,7 +169,7 @@
                 <span>Ellar Store</span>
             </div>
         </div>
-        
+
         <nav class="sidebar-nav">
             {% if user.is_authenticated %}
                 <a href="{% url 'inventory:dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
@@ -174,10 +188,32 @@
                     <i data-lucide="bar-chart-3" style="width: 18px; height: 18px; margin-right: 12px;"></i>
                     Reports
                 </a>
-                <a href="{% url 'inventory:admin-profile' %}" class="nav-item {% if request.resolver_match.url_name == 'admin-profile' %}active{% endif %}">
-                    <i data-lucide="settings" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                <a href="{% url 'inventory:settings' %}" class="nav-item {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
+                    <i data-lucide="sliders" style="width: 18px; height: 18px; margin-right: 12px;"></i>
                     Settings
                 </a>
+
+                <!-- Admin Only Links -->
+                {% if user.is_authenticated and user.username == 'EllarMiniMart' %}
+                <div style="border-top: 1px solid var(--light-border); margin: var(--spacing-lg) 0; padding-top: var(--spacing-lg);">
+                    <p style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--light-muted); margin-left: var(--spacing-md); margin-bottom: var(--spacing-md);">Admin</p>
+                    <a href="{% url 'inventory:user-approvals' %}" class="nav-item {% if request.resolver_match.url_name == 'user-approvals' %}active{% endif %}">
+                        <i data-lucide="user-check" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                        User Approvals
+                    </a>
+                    <a href="{% url 'inventory:staff-list' %}" class="nav-item {% if request.resolver_match.url_name == 'staff-list' %}active{% endif %}">
+                        <i data-lucide="users" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                        View Staff
+                    </a>
+                </div>
+                {% endif %}
+
+                <div class="sidebar-bottom">
+                    <a href="{% url 'inventory:logout' %}" class="nav-item logout-nav-item">
+                        <i data-lucide="log-out" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                        Logout
+                    </a>
+                </div>
             {% endif %}
         </nav>
     </aside>
@@ -191,19 +227,19 @@
                     <i data-lucide="menu" style="width: 18px; height: 18px;"></i>
                 </button>
             </div>
-            
+
             <div class="header-actions">
                 <!-- Theme Toggle -->
                 <button class="theme-toggle" id="themeToggle">
                     <i data-lucide="sun" style="width: 18px; height: 18px;"></i>
                 </button>
-                
+
                 <!-- Notifications (Admin Only) -->
                 {% if user.is_authenticated and user.username == 'EllarMiniMart' %}
                 <div class="notification-wrapper">
                     <button class="notification-btn" id="notificationBtn">
                         <i data-lucide="bell" style="width: 18px; height: 18px;"></i>
-                        <span class="notification-badge" id="notificationBadge">0</span>
+                        <span class="notification-badge" id="notificationBadge" style="display: none;"></span>
                     </button>
                     <div class="notification-dropdown" id="notificationDropdown">
                         <div class="notification-dropdown-header">
@@ -219,7 +255,7 @@
                     </div>
                 </div>
                 {% endif %}
-                
+
                 <!-- User Profile -->
                 {% if user.is_authenticated %}
                     <div class="user-profile">
@@ -248,6 +284,388 @@
         </div>
     </main>
 
+    <style id="theme-parity-runtime">
+        body .page-content,
+        body.dark-mode .page-content {
+            color: var(--theme-text);
+        }
+
+        body .sidebar-header,
+        body.dark-mode .sidebar-header,
+        body .user-avatar,
+        body.dark-mode .user-avatar {
+            background: var(--primary-gradient) !important;
+        }
+
+        body .sidebar,
+        body.dark-mode .sidebar {
+            width: 270px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            background: linear-gradient(180deg, var(--theme-sidebar), var(--theme-bg-soft)) !important;
+            border-right: 1px solid var(--theme-border) !important;
+            box-shadow: 18px 0 60px rgba(0, 0, 0, 0.12) !important;
+        }
+
+        body .main-content,
+        body.dark-mode .main-content {
+            margin-left: 270px !important;
+        }
+
+        body .sidebar-header,
+        body.dark-mode .sidebar-header {
+            min-height: 98px !important;
+            padding: 0 24px !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+
+        body .sidebar-nav,
+        body.dark-mode .sidebar-nav {
+            flex: 1 1 auto !important;
+            display: flex !important;
+            flex-direction: column !important;
+            padding: 24px 14px !important;
+        }
+
+        body .nav-item,
+        body.dark-mode .nav-item {
+            display: flex !important;
+            align-items: center !important;
+            min-height: 58px !important;
+            padding: 0 24px !important;
+            margin-bottom: 6px !important;
+            border-radius: 10px !important;
+            color: var(--theme-text) !important;
+            border: 1px solid transparent !important;
+            font-weight: 650 !important;
+        }
+
+        body .nav-item.active,
+        body.dark-mode .nav-item.active {
+            background: var(--primary-gradient) !important;
+            border-color: rgba(255, 255, 255, 0.22) !important;
+            color: white !important;
+            box-shadow: 0 14px 34px var(--primary-color-shadow) !important;
+        }
+
+        body .nav-item:hover,
+        body.dark-mode .nav-item:hover {
+            background: var(--primary-color-soft) !important;
+            border-color: var(--theme-border-strong) !important;
+        }
+
+        body .sidebar-bottom,
+        body.dark-mode .sidebar-bottom {
+            margin-top: auto !important;
+            padding-top: 18px !important;
+            border-top: 1px solid var(--theme-border) !important;
+        }
+
+        body .logout-nav-item,
+        body.dark-mode .logout-nav-item {
+            color: #dc2626 !important;
+        }
+
+        body .logout-nav-item:hover,
+        body.dark-mode .logout-nav-item:hover {
+            background: rgba(220, 38, 38, 0.12) !important;
+            border-color: rgba(220, 38, 38, 0.24) !important;
+        }
+
+        body .top-header,
+        body.dark-mode .top-header {
+            min-height: 68px !important;
+            padding: 11px 24px !important;
+            background: color-mix(in srgb, var(--theme-bg-soft) 82%, transparent) !important;
+            border-bottom: 1px solid var(--theme-border) !important;
+            backdrop-filter: blur(18px) !important;
+        }
+
+        body .header-actions,
+        body.dark-mode .header-actions {
+            gap: 14px !important;
+        }
+
+        body .theme-toggle,
+        body .notification-btn,
+        body.dark-mode .theme-toggle,
+        body.dark-mode .notification-btn {
+            width: 40px !important;
+            height: 40px !important;
+            padding: 0 !important;
+            border-radius: 14px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: var(--theme-panel-strong) !important;
+            border: 1px solid var(--theme-border) !important;
+            color: var(--theme-text) !important;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 10px 26px rgba(0, 0, 0, 0.12) !important;
+        }
+
+        body .user-avatar,
+        body.dark-mode .user-avatar {
+            width: 42px !important;
+            height: 42px !important;
+        }
+
+        body .dashboard-grid,
+        body.dark-mode .dashboard-grid {
+            gap: 24px !important;
+            padding: 28px !important;
+        }
+
+        body .dashboard-overview,
+        body.dark-mode .dashboard-overview {
+            display: grid !important;
+            grid-template-columns: repeat(5, minmax(190px, 1fr)) !important;
+            gap: 18px !important;
+            padding: 28px 28px 0 !important;
+            margin: 0 0 28px !important;
+        }
+
+        body .dashboard-charts,
+        body.dark-mode .dashboard-charts {
+            grid-template-columns: minmax(0, 2fr) minmax(330px, 0.92fr) !important;
+            gap: 28px !important;
+            padding-top: 0 !important;
+        }
+
+        body .dashboard-lower,
+        body.dark-mode .dashboard-lower {
+            grid-template-columns: 1fr 1fr !important;
+            gap: 28px !important;
+        }
+
+        body .modern-table-container,
+        body .kpi-card,
+        body .glass-card,
+        body .profit-preview,
+        body .product-card,
+        body.dark-mode .modern-table-container,
+        body.dark-mode .kpi-card,
+        body.dark-mode .glass-card,
+        body.dark-mode .profit-preview,
+        body.dark-mode .product-card {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+                var(--theme-panel) !important;
+            border-color: var(--theme-border) !important;
+            box-shadow: var(--theme-shadow-card) !important;
+            backdrop-filter: blur(16px);
+        }
+
+        body .modern-table-container,
+        body.dark-mode .modern-table-container {
+            border-radius: var(--ims-radius-xl) !important;
+        }
+
+        body .kpi-card,
+        body.dark-mode .kpi-card {
+            min-height: 170px !important;
+            padding: 32px !important;
+            border-radius: var(--ims-radius-xl) !important;
+        }
+
+        body .dashboard-overview .kpi-card,
+        body.dark-mode .dashboard-overview .kpi-card {
+            min-height: 188px !important;
+        }
+
+        body .kpi-card.primary .kpi-icon,
+        body.dark-mode .kpi-card.primary .kpi-icon,
+        body .kpi-card.purple .kpi-icon,
+        body.dark-mode .kpi-card.purple .kpi-icon,
+        body .status-primary,
+        body.dark-mode .status-primary {
+            background: var(--primary-gradient) !important;
+            color: white !important;
+        }
+
+        body .kpi-card.primary::before,
+        body.dark-mode .kpi-card.primary::before {
+            background: var(--primary-gradient) !important;
+        }
+
+        body .glass-card,
+        body .profit-preview,
+        body .product-card,
+        body.dark-mode .glass-card,
+        body.dark-mode .profit-preview,
+        body.dark-mode .product-card {
+            border-radius: var(--ims-radius-lg) !important;
+        }
+
+        body .table-header,
+        body.dark-mode .table-header {
+            min-height: auto !important;
+            padding: 24px 28px !important;
+            background: color-mix(in srgb, var(--theme-panel-strong) 58%, transparent) !important;
+            border-bottom-color: var(--theme-border) !important;
+        }
+
+        body .kpi-title,
+        body .table-header h2,
+        body .table-header h3,
+        body.dark-mode .kpi-title,
+        body.dark-mode .table-header h2,
+        body.dark-mode .table-header h3 {
+            color: var(--theme-muted) !important;
+            letter-spacing: 0.04em !important;
+        }
+
+        body .kpi-value,
+        body .modern-table td,
+        body .product-card h4,
+        body .product-card .sku,
+        body.dark-mode .kpi-value,
+        body.dark-mode .modern-table td,
+        body.dark-mode .product-card h4,
+        body.dark-mode .product-card .sku {
+            color: var(--theme-text) !important;
+        }
+
+        body .modern-table thead,
+        body .modern-table thead[style],
+        body.dark-mode .modern-table thead,
+        body.dark-mode .modern-table thead[style] {
+            background: var(--theme-table-head) !important;
+        }
+
+        body .modern-table th,
+        body.dark-mode .modern-table th {
+            color: var(--theme-muted) !important;
+            font-size: 0.78rem !important;
+            letter-spacing: 0.08em !important;
+            border-bottom-color: var(--theme-border) !important;
+        }
+
+        body .modern-table td,
+        body.dark-mode .modern-table td {
+            border-bottom-color: var(--theme-border) !important;
+        }
+
+        body .modern-table th,
+        body .modern-table td,
+        body.dark-mode .modern-table th,
+        body.dark-mode .modern-table td {
+            padding: 16px 18px !important;
+        }
+
+        body .btn-secondary,
+        body.dark-mode .btn-secondary {
+            background: var(--theme-panel-strong) !important;
+            border-color: var(--theme-border) !important;
+            color: var(--theme-text) !important;
+        }
+
+        body .btn-primary,
+        body.dark-mode .btn-primary {
+            background: var(--primary-gradient) !important;
+            color: white !important;
+            box-shadow: 0 12px 28px var(--primary-color-shadow) !important;
+        }
+
+        body input:not([type="checkbox"]):not([type="radio"]),
+        body select,
+        body textarea,
+        body.dark-mode input:not([type="checkbox"]):not([type="radio"]),
+        body.dark-mode select,
+        body.dark-mode textarea {
+            background: var(--theme-input) !important;
+            border-color: var(--theme-input-border) !important;
+            color: var(--theme-text) !important;
+            border-radius: var(--ims-radius-md) !important;
+        }
+
+        body label,
+        body .form-label,
+        body.dark-mode label,
+        body.dark-mode .form-label {
+            color: var(--theme-text) !important;
+        }
+
+        body small,
+        body .form-help,
+        body .input-prefix,
+        body .product-card .stock,
+        body.dark-mode small,
+        body.dark-mode .form-help,
+        body.dark-mode .input-prefix,
+        body.dark-mode .product-card .stock {
+            color: var(--theme-muted) !important;
+        }
+
+        body .modal-content,
+        body.dark-mode .modal-content {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+                var(--theme-panel-strong) !important;
+            border-color: var(--theme-border) !important;
+            box-shadow: 0 28px 90px rgba(0, 0, 0, 0.24) !important;
+        }
+
+        body .modal-header,
+        body.dark-mode .modal-header {
+            background: color-mix(in srgb, var(--theme-panel-strong) 72%, transparent) !important;
+            border-bottom-color: var(--theme-border) !important;
+        }
+
+        body .cart-items-container,
+        body.dark-mode .cart-items-container {
+            background: color-mix(in srgb, var(--theme-bg-soft) 54%, transparent) !important;
+            border-color: var(--theme-border) !important;
+        }
+
+        body .chart-body,
+        body.dark-mode .chart-body {
+            height: 264px !important;
+            padding: 30px 32px 26px !important;
+        }
+
+        body .chart-body-wide,
+        body.dark-mode .chart-body-wide {
+            height: 262px !important;
+        }
+
+        @media (max-width: 1200px) {
+            body .dashboard-overview,
+            body.dark-mode .dashboard-overview {
+                grid-template-columns: repeat(2, minmax(220px, 1fr)) !important;
+            }
+
+            body .dashboard-charts,
+            body .dashboard-lower,
+            body.dark-mode .dashboard-charts,
+            body.dark-mode .dashboard-lower {
+                grid-template-columns: 1fr !important;
+                gap: 24px !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body .main-content,
+            body.dark-mode .main-content {
+                margin-left: 0 !important;
+            }
+
+            body .dashboard-grid,
+            body .dashboard-overview,
+            body.dark-mode .dashboard-grid,
+            body.dark-mode .dashboard-overview {
+                padding: 16px !important;
+                gap: 16px !important;
+            }
+
+            body .dashboard-overview,
+            body.dark-mode .dashboard-overview {
+                grid-template-columns: 1fr !important;
+                margin-bottom: 0 !important;
+            }
+        }
+    </style>
+
     <!-- JavaScript -->
     <script>
         // Initialize Lucide icons
@@ -259,23 +677,159 @@
             Chart.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
         }
 
-        // Theme Toggle
+        // Theme engine
         const themeToggle = document.getElementById('themeToggle');
         const body = document.body;
-        const themeIcon = themeToggle.querySelector('i');
+        const themeIcon = themeToggle ? themeToggle.querySelector('i') : null;
 
-        // Dark dashboard theme is the default. Keep a saved light preference if the user toggles it.
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        body.classList.toggle('dark-mode', savedTheme === 'dark');
-        themeIcon.setAttribute('data-lucide', savedTheme === 'dark' ? 'moon' : 'sun');
-
-        themeToggle.addEventListener('click', () => {
-            body.classList.toggle('dark-mode');
-            const isDark = body.classList.contains('dark-mode');
+        function updateThemeIcon(isDark) {
+            if (!themeIcon) {
+                return;
+            }
             themeIcon.setAttribute('data-lucide', isDark ? 'moon' : 'sun');
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
             lucide.createIcons();
-        });
+        }
+
+        function setThemeMode(isDark, persistLocal = true) {
+            body.classList.toggle('dark-mode', isDark);
+            updateThemeIcon(isDark);
+            if (persistLocal) {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            }
+        }
+
+        function hexToRgb(hexColor) {
+            const normalizedHex = (hexColor || '#ec4899').replace('#', '');
+            const value = parseInt(normalizedHex, 16);
+            return [
+                (value >> 16) & 255,
+                (value >> 8) & 255,
+                value & 255
+            ].join(', ');
+        }
+
+        function adjustHex(hex, percent) {
+            const num = parseInt(hex.replace('#',''), 16);
+            const amt = Math.round(2.55 * percent);
+            const red = (num >> 16) + amt;
+            const green = (num >> 8 & 0x00FF) + amt;
+            const blue = (num & 0x0000FF) + amt;
+            return "#" + (0x1000000 + (red<255?red<1?0:red:255)*0x10000 +
+                (green<255?green<1?0:green:255)*0x100 +
+                (blue<255?blue<1?0:blue:255))
+                .toString(16).slice(1);
+        }
+
+        function applyPrimaryColor(hexColor, colorName, gradient, rgb) {
+            const safeHex = hexColor || '#ec4899';
+            const rgbValue = rgb || hexToRgb(safeHex);
+            const gradientValue = gradient || `linear-gradient(135deg, ${safeHex} 0%, ${adjustHex(safeHex, 30)} 100%)`;
+            let styleEl = document.getElementById('dynamic-theme-css');
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = 'dynamic-theme-css';
+                document.head.appendChild(styleEl);
+            }
+
+            styleEl.textContent = `
+                :root {
+                    --primary-color: ${safeHex};
+                    --primary-gradient: ${gradientValue};
+                    --primary-color-rgb: ${rgbValue};
+                    --primary-color-soft: rgba(${rgbValue}, 0.18);
+                    --primary-color-shadow: rgba(${rgbValue}, 0.28);
+                }
+            `;
+        }
+
+        function applyThemeConfig(config) {
+            if (!config) {
+                return;
+            }
+            if (typeof config.dark_mode === 'boolean') {
+                setThemeMode(config.dark_mode);
+            }
+            if (config.hex || config.gradient || config.rgb) {
+                applyPrimaryColor(config.hex, config.primary_color, config.gradient, config.rgb);
+            }
+        }
+
+        function getCookieValue(name) {
+            const cookie = document.cookie
+                .split(';')
+                .map(item => item.trim())
+                .find(item => item.startsWith(`${name}=`));
+            return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : '';
+        }
+
+        function getCsrfToken() {
+            const formToken = document.querySelector('[name=csrfmiddlewaretoken]');
+            return (formToken && formToken.value) || getCookieValue('csrftoken') || '{{ csrf_token }}';
+        }
+
+        async function saveThemePreference(payload) {
+            const response = await fetch('{% url "inventory:api-update-theme" %}', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken(),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Theme save failed with status ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.success && data.config) {
+                applyThemeConfig(data.config);
+            }
+            return data;
+        }
+
+        async function loadUserTheme() {
+            try {
+                const response = await fetch('{% url "inventory:api-theme-config" %}', {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`Theme load failed with status ${response.status}`);
+                }
+                applyThemeConfig(await response.json());
+            } catch (error) {
+                console.error('Error loading theme config:', error);
+                const savedTheme = localStorage.getItem('theme');
+                if (savedTheme) {
+                    setThemeMode(savedTheme === 'dark', false);
+                }
+            }
+        }
+
+        setThemeMode(body.classList.contains('dark-mode'));
+        loadUserTheme();
+
+        if (themeToggle) {
+            themeToggle.addEventListener('click', async () => {
+                const isDark = !body.classList.contains('dark-mode');
+                setThemeMode(isDark);
+
+                try {
+                    await saveThemePreference({ dark_mode: isDark });
+                } catch (error) {
+                    console.error('Error saving theme:', error);
+                }
+            });
+        }
+
+        window.applyPrimaryColor = applyPrimaryColor;
+        window.applyThemeConfig = applyThemeConfig;
+        window.saveThemePreference = saveThemePreference;
 
         // Mobile Menu Toggle
         const menuToggle = document.getElementById('menuToggle');
@@ -299,8 +853,8 @@
 
         // Close sidebar when clicking outside on mobile
         document.addEventListener('click', (e) => {
-            if (window.innerWidth <= 768 && 
-                !sidebar.contains(e.target) && 
+            if (window.innerWidth <= 768 &&
+                !sidebar.contains(e.target) &&
                 !menuToggle.contains(e.target)) {
                 sidebar.classList.remove('active');
             }
@@ -469,7 +1023,7 @@
             }
 
             const html = notifications.slice(0, 5).map(notification => `
-                <div class="notification-dropdown-item ${notification.is_read ? 'read' : 'unread'}" 
+                <div class="notification-dropdown-item ${notification.is_read ? 'read' : 'unread'}"
                      style="padding: var(--spacing-md); border-bottom: 1px solid var(--light-border); cursor: pointer;"
                      onclick="markAsRead(${notification.id})">
                     <div style="display: flex; align-items: start; gap: var(--spacing-sm);">
@@ -494,12 +1048,30 @@
 
         // Update notification badge
         function updateNotificationBadge(count) {
+            count = parseInt(count, 10) || 0;
             if (count > 0) {
                 notificationBadge.textContent = count > 99 ? '99+' : count;
                 notificationBadge.style.display = 'block';
             } else {
+                notificationBadge.textContent = '';
                 notificationBadge.style.display = 'none';
             }
+        }
+
+        function refreshNotificationBadge() {
+            fetch('/api/notifications/', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.unread_count !== undefined) {
+                    updateNotificationBadge(data.unread_count);
+                }
+            })
+            .catch(error => console.error('Error refreshing notifications:', error));
         }
 
         // Mark notification as read
@@ -537,21 +1109,11 @@
         }
 
         // Auto-refresh notifications every 30 seconds
+        refreshNotificationBadge();
+
         setInterval(() => {
             if (!notificationDropdown.classList.contains('show')) {
-                fetch('/api/notifications/', {
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.unread_count !== undefined) {
-                        updateNotificationBadge(data.unread_count);
-                    }
-                })
-                .catch(error => console.error('Error refreshing notifications:', error));
+                refreshNotificationBadge();
             }
         }, 30000);
         // End Django template logic for EllarMiniMart admin notifications

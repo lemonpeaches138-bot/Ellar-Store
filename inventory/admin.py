@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Product, StockMovement, Transaction, TransactionItem
+from .models import Product, StockMovement, Transaction, TransactionItem, UserProfile, UserRegistration, Notification
 
 
 @admin.register(Product)
@@ -42,3 +42,26 @@ class TransactionAdmin(admin.ModelAdmin):
     readonly_fields = ("transaction_id", "subtotal", "discount", "total", "cash_received", "change", "created_at")
     inlines = [TransactionItemInline]
 
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "dark_mode", "primary_color", "updated_at")
+    search_fields = ("user__username",)
+    list_filter = ("dark_mode", "primary_color")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(UserRegistration)
+class UserRegistrationAdmin(admin.ModelAdmin):
+    list_display = ("username", "email", "branch", "is_approved", "created_at")
+    search_fields = ("username", "email", "first_name", "last_name")
+    list_filter = ("is_approved", "branch", "created_at")
+    readonly_fields = ("created_at", "approved_at", "approved_by")
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ("title", "type", "created_by", "is_read", "created_at")
+    search_fields = ("title", "message")
+    list_filter = ("type", "is_read", "created_at")
+    readonly_fields = ("created_at",)
