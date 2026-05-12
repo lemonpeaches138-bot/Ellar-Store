@@ -207,7 +207,7 @@
             <i data-lucide="file-text" style="width: 20px; height: 20px;"></i>
             Reports
         </a>
-        {% if user.username == 'EllarMiniMart' %}
+        {% if user.is_superuser or user.username == 'EllarMiniMart' %}
         <a href="{% url 'inventory:user-approvals' %}" class="btn btn-warning" style="justify-content: center; padding: var(--spacing-lg); background: var(--warning-gradient);">
             <i data-lucide="users" style="width: 20px; height: 20px;"></i>
             User Approvals

@@ -391,9 +391,17 @@ body.dark-mode .cart-items-container::-webkit-scrollbar-thumb:hover {
 <script>
 let cart = [];
 let currentProduct = null;
+const posSearchUrl = "{% url 'inventory:pos-search' %}";
+const posProductsUrl = "{% url 'inventory:pos-get-products' %}";
+const posCheckoutUrl = "{% url 'inventory:pos-checkout' %}";
+const receiptUrlTemplate = "{% url 'inventory:pos-receipt' 'TRANSACTION_ID' %}";
 
 // Initialize Lucide icons
-lucide.createIcons();
+if (window.renderIcons) {
+    window.renderIcons();
+} else if (window.lucide) {
+    window.lucide.createIcons();
+}
 
 // Search functionality
 document.getElementById('product_search').addEventListener('keypress', function(e) {
@@ -406,7 +414,9 @@ function searchProduct() {
     const searchTerm = document.getElementById('product_search').value.trim();
     if (!searchTerm) return;
 
-    fetch(`/pos/search/?q=${encodeURIComponent(searchTerm)}`)
+    fetch(`${posSearchUrl}?q=${encodeURIComponent(searchTerm)}`, {
+        credentials: 'same-origin',
+    })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -501,7 +511,11 @@ function updateCart() {
     }
     
     updateTotals();
-    lucide.createIcons();
+    if (window.renderIcons) {
+        window.renderIcons();
+    } else if (window.lucide) {
+        window.lucide.createIcons();
+    }
 }
 
 function updateQuantity(index, newQuantity) {
@@ -576,11 +590,13 @@ function checkout() {
         cash_received: cash
     };
 
-    fetch('/pos/checkout/', {
+    fetch(posCheckoutUrl, {
         method: 'POST',
+        credentials: 'same-origin',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
+            'X-CSRFToken': getRequestCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest'
         },
         body: JSON.stringify(transactionData)
     })
@@ -616,9 +632,11 @@ function closeProductBrowser() {
 }
 
 function loadProducts(filter = '') {
-    const url = filter ? `/pos/products/?type=${filter}` : '/pos/products/';
+    const url = filter ? `${posProductsUrl}?type=${encodeURIComponent(filter)}` : posProductsUrl;
     
-    fetch(url)
+    fetch(url, {
+        credentials: 'same-origin',
+    })
         .then(response => response.json())
         .then(data => {
             const content = document.getElementById('product_browser_content');
@@ -645,7 +663,9 @@ function loadProducts(filter = '') {
 }
 
 function selectProduct(productId) {
-    fetch(`/pos/search/?q=${productId}`)
+    fetch(`${posSearchUrl}?q=${encodeURIComponent(productId)}`, {
+        credentials: 'same-origin',
+    })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -681,6 +701,10 @@ function getCookie(name) {
     return cookieValue;
 }
 
+function getRequestCsrfToken() {
+    return window.getCsrfToken ? window.getCsrfToken() : getCookie('csrftoken');
+}
+
 function showMessage(message, type) {
     // Create toast notification
     const toast = document.createElement('div');
@@ -691,7 +715,11 @@ function showMessage(message, type) {
     `;
     
     document.body.appendChild(toast);
-    lucide.createIcons();
+    if (window.renderIcons) {
+        window.renderIcons();
+    } else if (window.lucide) {
+        window.lucide.createIcons();
+    }
     
     setTimeout(() => {
         toast.style.animation = 'slideIn 0.3s ease reverse';
@@ -741,7 +769,7 @@ function showReceiptModal(transactionId) {
             console.warn('Receipt iframe bridge unavailable:', error);
         }
     };
-    frame.src = `/pos/receipt/${encodeURIComponent(transactionId)}/?embed=modal`;
+    frame.src = `${receiptUrlTemplate.replace('TRANSACTION_ID', encodeURIComponent(transactionId))}?embed=modal`;
     modal.style.display = 'flex';
 }
 

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 import json
 
@@ -9,6 +10,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.html import escape
 from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -23,10 +25,86 @@ def is_staff(user):
     return user.is_staff
 
 
+def is_system_admin(user):
+    """Return True for users allowed to manage system-level admin features."""
+    return user.is_authenticated and (user.is_superuser or user.username == 'EllarMiniMart')
+
+
 def _get_user_profile(user):
     """Return a profile for theme preferences, creating it for older users."""
     profile, _created = UserProfile.objects.get_or_create(user=user)
     return profile
+
+
+def _month_start_for_offset(reference_date, offset):
+    """Return the first day of the month offset from reference_date."""
+    month_index = reference_date.year * 12 + reference_date.month - 1 + offset
+    year = month_index // 12
+    month = month_index % 12 + 1
+    return reference_date.replace(year=year, month=month, day=1)
+
+
+def _chart_number(value):
+    value = value or Decimal("0.00")
+    return float(value.quantize(Decimal("0.01")))
+
+
+def _sales_trends_from_transactions():
+    """Build real sales trend data for the reports page from saved transactions."""
+    today = timezone.localdate()
+    week_start = today - timedelta(days=6)
+    month_start = today - timedelta(days=27)
+    year_start = _month_start_for_offset(today, -11)
+
+    week_labels = [(week_start + timedelta(days=index)).strftime("%b %d") for index in range(7)]
+    week_totals = {week_start + timedelta(days=index): Decimal("0.00") for index in range(7)}
+
+    month_ranges = []
+    month_totals = [Decimal("0.00") for _index in range(4)]
+    for index in range(4):
+        start = month_start + timedelta(days=index * 7)
+        end = min(start + timedelta(days=6), today)
+        month_ranges.append((start, end))
+
+    month_labels = [
+        f"{start.strftime('%b %d')}-{end.strftime('%b %d')}"
+        for start, end in month_ranges
+    ]
+
+    year_months = [_month_start_for_offset(today, offset) for offset in range(-11, 1)]
+    year_totals = {(month.year, month.month): Decimal("0.00") for month in year_months}
+    year_labels = [month.strftime("%b %Y") for month in year_months]
+
+    transaction_rows = Transaction.objects.filter(created_at__date__gte=year_start).values_list("created_at", "total")
+    for created_at, total in transaction_rows:
+        transaction_date = timezone.localtime(created_at).date()
+        total = total or Decimal("0.00")
+
+        if transaction_date in week_totals:
+            week_totals[transaction_date] += total
+
+        if month_start <= transaction_date <= today:
+            month_index = min((transaction_date - month_start).days // 7, 3)
+            month_totals[month_index] += total
+
+        month_key = (transaction_date.year, transaction_date.month)
+        if month_key in year_totals:
+            year_totals[month_key] += total
+
+    return {
+        "week": {
+            "labels": week_labels,
+            "data": [_chart_number(week_totals[week_start + timedelta(days=index)]) for index in range(7)],
+        },
+        "month": {
+            "labels": month_labels,
+            "data": [_chart_number(total) for total in month_totals],
+        },
+        "year": {
+            "labels": year_labels,
+            "data": [_chart_number(year_totals[(month.year, month.month)]) for month in year_months],
+        },
+    }
 
 
 def login_view(request):
@@ -41,15 +119,12 @@ def login_view(request):
                 login(request, user)
                 messages.success(request, f"Welcome back, {user.username}!")
 
-                # Create login notification for admin
-                admin = User.objects.filter(username='EllarMiniMart').first()
-                if admin:
-                    Notification.objects.create(
-                        type=Notification.NotificationType.USER_REGISTERED,
-                        title=f"Staff Login: {user.username}",
-                        message=f"{user.username} ({user.first_name} {user.last_name}) logged in.",
-                        created_by=user,
-                    )
+                Notification.objects.create(
+                    type=Notification.NotificationType.USER_REGISTERED,
+                    title=f"Staff Login: {user.username}",
+                    message=f"{user.username} ({user.first_name} {user.last_name}) logged in.",
+                    created_by=user,
+                )
 
                 return redirect("inventory:dashboard")
             else:
@@ -66,16 +141,13 @@ def logout_view(request):
     logout(request)
     messages.success(request, "You have been logged out successfully.")
 
-    # Create logout notification for admin
     if user.is_authenticated or user.is_staff:
-        admin = User.objects.filter(username='EllarMiniMart').first()
-        if admin:
-            Notification.objects.create(
-                type=Notification.NotificationType.USER_REGISTERED,
-                title=f"Staff Logout: {user.username}",
-                message=f"{user.username} ({user.first_name} {user.last_name}) logged out.",
-                created_by=user,
-            )
+        Notification.objects.create(
+            type=Notification.NotificationType.USER_REGISTERED,
+            title=f"Staff Logout: {user.username}",
+            message=f"{user.username} ({user.first_name} {user.last_name}) logged out.",
+            created_by=user,
+        )
 
     return redirect("inventory:login")
 
@@ -327,42 +399,79 @@ def stock_adjust(request, pk):
 @user_passes_test(is_staff, login_url="inventory:login")
 def reports(request):
     products = Product.objects.all()
+    transactions = Transaction.objects.all()
+    transaction_items = TransactionItem.objects.select_related("product", "transaction")
+    movements = StockMovement.objects.all()
     low_stock = products.filter(quantity__lte=F("reorder_level"))
 
-    # Calculate statistics
     stock_value_expression = ExpressionWrapper(
         F("quantity") * F("unit_price"), output_field=DecimalField(max_digits=12, decimal_places=2)
     )
+    stock_cost_expression = ExpressionWrapper(
+        F("quantity") * F("purchase_price"), output_field=DecimalField(max_digits=12, decimal_places=2)
+    )
     total_stock_value = products.aggregate(total=Sum(stock_value_expression))["total"] or Decimal("0.00")
+    total_stock_cost = products.aggregate(total=Sum(stock_cost_expression))["total"] or Decimal("0.00")
 
-    total_sold = sum(product.total_sold for product in products)
+    total_units_sold = transaction_items.aggregate(total=Sum("quantity"))["total"] or 0
+    total_revenue = transactions.aggregate(total=Sum("total"))["total"] or Decimal("0.00")
+    gross_revenue = transaction_items.aggregate(total=Sum("subtotal"))["total"] or Decimal("0.00")
+    total_discount = transactions.aggregate(total=Sum("discount"))["total"] or Decimal("0.00")
+    transaction_count = transactions.count()
+    average_sale = total_revenue / transaction_count if transaction_count else Decimal("0.00")
     low_stock_count = low_stock.count()
 
-    # Stock movement analytics
-    stock_in_count = StockMovement.objects.filter(movement_type='IN').count()
-    stock_out_count = StockMovement.objects.filter(movement_type='OUT').count()
+    stock_in_movements = movements.filter(movement_type=StockMovement.MovementType.STOCK_IN)
+    stock_out_movements = movements.filter(movement_type=StockMovement.MovementType.STOCK_OUT)
+    stock_in_count = stock_in_movements.count()
+    stock_out_count = stock_out_movements.count()
     total_movements = stock_in_count + stock_out_count
+    stock_in_units = stock_in_movements.aggregate(total=Sum("quantity"))["total"] or 0
+    stock_out_units = stock_out_movements.aggregate(total=Sum("quantity"))["total"] or 0
 
-    # Top products
-    top_products = products.filter(total_sold__gt=0).order_by('-total_sold')[:10]
+    top_products = (
+        products.annotate(
+            sales_units=Sum("transactionitem__quantity"),
+            sales_revenue=Sum("transactionitem__subtotal"),
+        )
+        .filter(sales_units__gt=0)
+        .order_by("-sales_units", "-sales_revenue", "name")[:10]
+    )
 
-    # Product type counts for charts
     product_type_counts = {}
     for choice in Product.ProductType.choices:
         type_name = choice[1]
         count = products.filter(product_type=choice[0]).count()
-        product_type_counts[type_name] = count
+        if count:
+            product_type_counts[type_name] = count
+
+    if not product_type_counts:
+        product_type_counts["No products"] = 0
+
+    sales_trends = _sales_trends_from_transactions()
 
     context = {
         "total_products": products.count(),
         "total_value": total_stock_value,
+        "total_stock_cost": total_stock_cost,
         "low_stock_count": low_stock_count,
-        "total_sales": total_sold,
+        "total_sales": total_units_sold,
+        "total_units_sold": total_units_sold,
+        "total_revenue": total_revenue,
+        "gross_revenue": gross_revenue,
+        "total_discount": total_discount,
+        "transaction_count": transaction_count,
+        "average_sale": average_sale,
         "stock_in_count": stock_in_count,
         "stock_out_count": stock_out_count,
+        "stock_in_units": stock_in_units,
+        "stock_out_units": stock_out_units,
         "total_movements": total_movements,
         "top_products": top_products,
         "product_type_counts": product_type_counts,
+        "product_type_counts_json": json.dumps(product_type_counts),
+        "sales_trends": sales_trends,
+        "sales_trends_json": json.dumps(sales_trends),
     }
     return render(request, "inventory/modern_reports.html", context)
 
@@ -502,9 +611,8 @@ def admin_profile(request):
 @user_passes_test(is_staff, login_url="inventory:login")
 def user_approvals(request):
     """Display and handle user registration approvals."""
-    # Check if current user is the admin (EllarMiniMart)
-    if request.user.username != 'EllarMiniMart':
-        messages.error(request, "Only EllarMiniMart can approve user registrations.")
+    if not is_system_admin(request.user):
+        messages.error(request, "Only a system admin can approve user registrations.")
         return redirect("inventory:dashboard")
 
     pending_registrations = UserRegistration.objects.filter(is_approved=False)
@@ -519,9 +627,8 @@ def user_approvals(request):
 @user_passes_test(is_staff, login_url="inventory:login")
 def approve_user(request, registration_id):
     """Approve a user registration."""
-    # Check if current user is the admin (EllarMiniMart)
-    if request.user.username != 'EllarMiniMart':
-        messages.error(request, "Only EllarMiniMart can approve user registrations.")
+    if not is_system_admin(request.user):
+        messages.error(request, "Only a system admin can approve user registrations.")
         return redirect("inventory:dashboard")
 
     registration = get_object_or_404(UserRegistration, id=registration_id)
@@ -556,9 +663,8 @@ def approve_user(request, registration_id):
 @user_passes_test(is_staff, login_url="inventory:login")
 def reject_user(request, registration_id):
     """Reject a user registration."""
-    # Check if current user is the admin (EllarMiniMart)
-    if request.user.username != 'EllarMiniMart':
-        messages.error(request, "Only EllarMiniMart can reject user registrations.")
+    if not is_system_admin(request.user):
+        messages.error(request, "Only a system admin can reject user registrations.")
         return redirect("inventory:dashboard")
 
     registration = get_object_or_404(UserRegistration, id=registration_id)
@@ -589,13 +695,13 @@ def staff_list(request):
 @user_passes_test(is_staff, login_url="inventory:login")
 def staff_set_password(request, staff_id):
     """Allow the system admin to reset a staff member password."""
-    if request.user.username != 'EllarMiniMart':
-        messages.error(request, "Only EllarMiniMart can manage staff passwords.")
+    if not is_system_admin(request.user):
+        messages.error(request, "Only a system admin can manage staff passwords.")
         return redirect("inventory:dashboard")
 
     staff_user = get_object_or_404(User, id=staff_id, is_staff=True)
 
-    if staff_user.username == 'EllarMiniMart':
+    if staff_user.username == 'EllarMiniMart' or staff_user.is_superuser:
         messages.error(request, "The system admin account cannot be managed here.")
         return redirect("inventory:staff-list")
 
@@ -624,8 +730,8 @@ def staff_set_password(request, staff_id):
 @user_passes_test(is_staff, login_url="inventory:login")
 def staff_remove(request, staff_id):
     """Remove a staff member from the system."""
-    if request.user.username != 'EllarMiniMart':
-        messages.error(request, "Only EllarMiniMart can remove staff members.")
+    if not is_system_admin(request.user):
+        messages.error(request, "Only a system admin can remove staff members.")
         return redirect("inventory:dashboard")
 
     staff_user = get_object_or_404(User, id=staff_id, is_staff=True)
@@ -645,9 +751,8 @@ def staff_remove(request, staff_id):
 @user_passes_test(is_staff, login_url="inventory:login")
 def notifications(request):
     """Display system notifications for admin."""
-    # Only EllarMiniMart can see notifications
-    if request.user.username != 'EllarMiniMart':
-        messages.error(request, "Only EllarMiniMart can view notifications.")
+    if not is_system_admin(request.user):
+        messages.error(request, "Only a system admin can view notifications.")
         return redirect("inventory:dashboard")
 
     notifications = Notification.objects.all().order_by('-created_at')
@@ -664,9 +769,11 @@ def notifications(request):
 @user_passes_test(is_staff, login_url="inventory:login")
 def mark_notification_read(request, notification_id):
     """Mark a notification as read."""
-    # Only EllarMiniMart can mark notifications as read
-    if request.user.username != 'EllarMiniMart':
-        return JsonResponse({'success': False, 'message': 'Unauthorized'})
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Only POST allowed'}, status=405)
+
+    if not is_system_admin(request.user):
+        return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
 
     notification = get_object_or_404(Notification, id=notification_id)
     notification.is_read = True
@@ -679,8 +786,7 @@ def mark_notification_read(request, notification_id):
 @user_passes_test(is_staff, login_url="inventory:login")
 def api_notifications(request):
     """API endpoint for notifications."""
-    # Only EllarMiniMart can access notifications
-    if request.user.username != 'EllarMiniMart':
+    if not is_system_admin(request.user):
         return JsonResponse({'error': 'Unauthorized'}, status=403)
 
     notifications = Notification.objects.all().order_by('-created_at')[:10]
@@ -725,10 +831,11 @@ def pos_search_product(request):
     if not query:
         return JsonResponse({'success': False, 'message': 'Please enter a search term'})
 
-    # Search by SKU first (exact match), then by name (contains)
-    products = Product.objects.filter(quantity__gt=0).filter(
-        Q(sku__iexact=query) | Q(name__icontains=query)
-    )
+    product_filter = Q(sku__iexact=query) | Q(name__icontains=query)
+    if query.isdigit():
+        product_filter |= Q(pk=int(query))
+
+    products = Product.objects.filter(quantity__gt=0).filter(product_filter)
 
     if products.exists():
         product = products.first()
@@ -1069,7 +1176,7 @@ def pos_checkout(request):
         return JsonResponse({
             'success': True,
             'transaction_id': transaction.transaction_id,
-            'redirect_url': f'/pos/receipt/{transaction.id}/'
+            'redirect_url': reverse("inventory:pos-receipt", kwargs={"transaction_id": transaction.transaction_id})
         })
     except Product.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'Product not found'})

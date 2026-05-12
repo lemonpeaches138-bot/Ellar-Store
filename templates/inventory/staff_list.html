@@ -75,12 +75,12 @@
                         </div>
 
                         <div class="staff-actions">
-                            {% if staff.username == 'EllarMiniMart' %}
+                            {% if staff.is_superuser or staff.username == 'EllarMiniMart' %}
                                 <span class="admin-badge">
                                     <i data-lucide="shield" style="width: 16px; height: 16px; margin-right: var(--spacing-xs);"></i>
                                     System Admin
                                 </span>
-                            {% elif user.username == 'EllarMiniMart' %}
+                            {% elif user.is_superuser or user.username == 'EllarMiniMart' %}
                                 <button
                                     type="button"
                                     class="btn btn-secondary staff-manage-btn"

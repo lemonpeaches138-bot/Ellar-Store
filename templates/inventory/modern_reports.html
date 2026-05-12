@@ -3,8 +3,9 @@
 {% block title %}Reports | Ellar Store{% endblock %}
 
 {% block content %}
-<!-- Hidden data for charts -->
-<script id="categoryData" type="application/json">{{ product_type_counts|safe }}</script>
+<!-- Hidden data for charts. Values are generated from saved system records. -->
+<script id="salesTrendsData" type="application/json">{{ sales_trends_json|safe }}</script>
+<script id="categoryData" type="application/json">{{ product_type_counts_json|safe }}</script>
 
 <!-- Reports Overview -->
 <div class="dashboard-grid">
@@ -27,8 +28,8 @@
     <div class="kpi-card success">
         <div class="kpi-header">
             <div>
-                <div class="kpi-title">Total Value</div>
-                <div class="kpi-value">₱{{ total_value|default:0 }}</div>
+                <div class="kpi-title">Inventory Value</div>
+                <div class="kpi-value">&#8369;{{ total_value|default:0|floatformat:2 }}</div>
                 <div class="kpi-change positive">
                     <i data-lucide="trending-up" style="width: 16px; height: 16px;"></i>
                     <span>Current inventory</span>
@@ -59,15 +60,31 @@
     <div class="kpi-card">
         <div class="kpi-header">
             <div>
-                <div class="kpi-title">Total Sales</div>
-                <div class="kpi-value">{{ total_sales|default:0 }}</div>
+                <div class="kpi-title">Sales Revenue</div>
+                <div class="kpi-value">&#8369;{{ total_revenue|default:0|floatformat:2 }}</div>
                 <div class="kpi-change positive">
                     <i data-lucide="shopping-cart" style="width: 16px; height: 16px;"></i>
-                    <span>Items sold</span>
+                    <span>{{ transaction_count }} completed transactions</span>
                 </div>
             </div>
             <div class="kpi-icon">
-                <i data-lucide="trending-up"></i>
+                <i data-lucide="receipt"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="kpi-card success">
+        <div class="kpi-header">
+            <div>
+                <div class="kpi-title">Units Sold</div>
+                <div class="kpi-value">{{ total_units_sold|default:0 }}</div>
+                <div class="kpi-change positive">
+                    <i data-lucide="trending-up" style="width: 16px; height: 16px;"></i>
+                    <span>From saved POS sales</span>
+                </div>
+            </div>
+            <div class="kpi-icon">
+                <i data-lucide="shopping-bag"></i>
             </div>
         </div>
     </div>
@@ -95,7 +112,7 @@
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-sm) 0;">
                         <span style="color: var(--light-muted);">Total Value:</span>
-                        <span style="font-weight: 600; color: #10b981;">₱{{ total_value|default:0 }}</span>
+                        <span style="font-weight: 600; color: #10b981;">&#8369;{{ total_value|default:0|floatformat:2 }}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-sm) 0;">
                         <span style="color: var(--light-muted);">Low Stock:</span>
@@ -126,15 +143,15 @@
                 
                 <div style="display: grid; gap: var(--spacing-md); margin-bottom: var(--spacing-lg);">
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-sm) 0;">
-                        <span style="color: var(--light-muted);">Stock In:</span>
-                        <span style="font-weight: 600; color: #10b981;">{{ stock_in_count }}</span>
+                        <span style="color: var(--light-muted);">Stock In Units:</span>
+                        <span style="font-weight: 600; color: #10b981;">{{ stock_in_units }}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-sm) 0;">
-                        <span style="color: var(--light-muted);">Stock Out:</span>
-                        <span style="font-weight: 600; color: #f59e0b;">{{ stock_out_count }}</span>
+                        <span style="color: var(--light-muted);">Stock Out Units:</span>
+                        <span style="font-weight: 600; color: #f59e0b;">{{ stock_out_units }}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-sm) 0;">
-                        <span style="color: var(--light-muted);">Total Movements:</span>
+                        <span style="color: var(--light-muted);">Movement Records:</span>
                         <span style="font-weight: 600;">{{ total_movements }}</span>
                     </div>
                 </div>
@@ -162,9 +179,9 @@
             Analytics Dashboard
         </h3>
         <div class="table-actions">
-            <button class="btn btn-secondary" onclick="updateCharts('week')">Week</button>
-            <button class="btn btn-primary" onclick="updateCharts('month')">Month</button>
-            <button class="btn btn-secondary" onclick="updateCharts('year')">Year</button>
+            <button class="btn btn-secondary" onclick="updateCharts('week', this)">Week</button>
+            <button class="btn btn-primary" onclick="updateCharts('month', this)">Month</button>
+            <button class="btn btn-secondary" onclick="updateCharts('year', this)">Year</button>
         </div>
     </div>
     
@@ -172,7 +189,7 @@
         <div class="dashboard-grid" style="grid-template-columns: 2fr 1fr; gap: var(--spacing-lg);">
             <!-- Sales Chart -->
             <div class="glass-card" style="max-height: 300px; overflow: hidden;">
-                <h4 style="margin-bottom: var(--spacing-md); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Sales Trend</h4>
+                <h4 style="margin-bottom: var(--spacing-md); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Sales Revenue Trend</h4>
                 <div style="height: 200px; position: relative;">
                     <canvas id="salesChart"></canvas>
                 </div>
@@ -180,7 +197,7 @@
             
             <!-- Category Distribution -->
             <div class="glass-card" style="max-height: 300px; overflow: hidden;">
-                <h4 style="margin-bottom: var(--spacing-md); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Category Distribution</h4>
+                <h4 style="margin-bottom: var(--spacing-md); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Product Count by Category</h4>
                 <div style="height: 200px; position: relative;">
                     <canvas id="categoryChart"></canvas>
                 </div>
@@ -197,7 +214,7 @@
                             <th>Product</th>
                             <th>Category</th>
                             <th>Units Sold</th>
-                            <th>Revenue</th>
+                            <th>Gross Revenue</th>
                             <th>Stock</th>
                         </tr>
                     </thead>
@@ -216,10 +233,10 @@
                                     <span class="status-badge status-success">{{ product.get_product_type_display }}</span>
                                 </td>
                                 <td>
-                                    <span style="font-weight: 600; color: #667eea;">{{ product.total_sold }}</span>
+                                    <span style="font-weight: 600; color: #667eea;">{{ product.sales_units|default:0 }}</span>
                                 </td>
                                 <td>
-                                    <span style="font-weight: 600; color: #10b981;">₱{{ product.total_revenue|default:0 }}</span>
+                                    <span style="font-weight: 600; color: #10b981;">&#8369;{{ product.sales_revenue|default:0|floatformat:2 }}</span>
                                 </td>
                                 <td>
                                     {% if product.quantity <= product.reorder_level %}
@@ -278,111 +295,110 @@
 // Initialize Lucide icons
 lucide.createIcons();
 
-// Sales Chart
-const salesCtx = document.getElementById('salesChart').getContext('2d');
-const salesChart = new Chart(salesCtx, {
-    type: 'line',
-    data: {
-        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-        datasets: [{
-            label: 'Sales',
-            data: [12000, 19000, 15000, 25000, 22000, 30000],
-            borderColor: '#667eea',
-            backgroundColor: 'rgba(102, 126, 234, 0.1)',
-            tension: 0.4,
-            fill: true
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                display: false
-            }
+const salesTrendsElement = document.getElementById('salesTrendsData');
+const salesTrends = salesTrendsElement ? JSON.parse(salesTrendsElement.textContent) : {};
+const defaultSalesPeriod = salesTrends.month || { labels: [], data: [] };
+
+let salesChart = null;
+let categoryChart = null;
+const categoryDataElement = document.getElementById('categoryData');
+const categoryData = categoryDataElement ? JSON.parse(categoryDataElement.textContent) : {};
+const chartColors = [
+    '#667eea',
+    '#764ba2',
+    '#f093fb',
+    '#f5576c',
+    '#13B497',
+    '#59D4A4',
+    '#FA8231',
+    '#FFD14C',
+    '#3b82f6',
+    '#14b8a6',
+    '#8b5cf6',
+    '#ef4444',
+    '#6366f1',
+    '#10b981',
+    '#f97316'
+];
+
+if (window.Chart) {
+    const salesCtx = document.getElementById('salesChart').getContext('2d');
+    salesChart = new Chart(salesCtx, {
+        type: 'line',
+        data: {
+            labels: defaultSalesPeriod.labels,
+            datasets: [{
+                label: 'Sales revenue',
+                data: defaultSalesPeriod.data,
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
         },
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: {
-                    callback: function(value) {
-                        return '₱' + value.toLocaleString();
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: context => `PHP ${Number(context.parsed.y || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: value => `PHP ${Number(value).toLocaleString()}`
                     }
                 }
             }
         }
-    }
-});
+    });
 
-// Category Chart
-const categoryCtx = document.getElementById('categoryChart').getContext('2d');
-// Get real data from data attribute
-const categoryDataElement = document.getElementById('categoryData');
-const categoryData = categoryDataElement ? JSON.parse(categoryDataElement.textContent) : {
-    'Electronics': 35,
-    'Clothing': 25,
-    'Food': 20,
-    'Beverages': 15,
-    'Others': 5
-};
-
-const categoryChart = new Chart(categoryCtx, {
-    type: 'doughnut',
-    data: {
-        labels: Object.keys(categoryData),
-        datasets: [{
-            data: Object.values(categoryData),
-            backgroundColor: [
-                '#667eea',
-                '#764ba2',
-                '#f093fb',
-                '#f5576c',
-                '#13B497'
-            ],
-            borderWidth: 0
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'bottom'
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    categoryChart = new Chart(categoryCtx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(categoryData),
+            datasets: [{
+                data: Object.values(categoryData),
+                backgroundColor: Object.keys(categoryData).map((_label, index) => chartColors[index % chartColors.length]),
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
             }
         }
-    }
-});
+    });
+}
 
-// Update Charts Function
-function updateCharts(period) {
-    // Update button states
+function updateCharts(period, button) {
     document.querySelectorAll('.table-actions .btn').forEach(btn => {
         btn.classList.remove('btn-primary');
         btn.classList.add('btn-secondary');
     });
-    event.target.classList.remove('btn-secondary');
-    event.target.classList.add('btn-primary');
-
-    // Update chart data based on period
-    let newLabels, newData;
-    
-    switch(period) {
-        case 'week':
-            newLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-            newData = [3000, 4500, 3200, 5800, 4900, 6200, 5500];
-            break;
-        case 'month':
-            newLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-            newData = [25000, 28000, 32000, 30000];
-            break;
-        case 'year':
-            newLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            newData = [12000, 19000, 15000, 25000, 22000, 30000, 28000, 35000, 32000, 29000, 31000, 33000];
-            break;
+    if (button) {
+        button.classList.remove('btn-secondary');
+        button.classList.add('btn-primary');
     }
 
-    salesChart.data.labels = newLabels;
-    salesChart.data.datasets[0].data = newData;
+    const periodData = salesTrends[period] || { labels: [], data: [] };
+    if (!salesChart) {
+        return;
+    }
+    salesChart.data.labels = periodData.labels;
+    salesChart.data.datasets[0].data = periodData.data;
     salesChart.update();
 }
 

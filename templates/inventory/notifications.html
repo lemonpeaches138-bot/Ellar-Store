@@ -93,6 +93,7 @@
                             {% if not notification.is_read %}
                             <button class="btn btn-secondary mark-read-btn" 
                                     data-notification-id="{{ notification.id }}"
+                                    data-mark-read-url="{% url 'inventory:mark-notification-read' notification.id %}"
                                     style="padding: var(--spacing-sm) var(--spacing-lg); font-size: 0.875rem;">
                                 <i data-lucide="check" style="width: 16px; height: 16px; margin-right: var(--spacing-xs);"></i>
                                 Mark as Read
@@ -268,22 +269,34 @@
 <script>
 // Initialize Lucide icons
 document.addEventListener('DOMContentLoaded', function() {
-    lucide.createIcons();
+    if (window.renderIcons) {
+        window.renderIcons();
+    } else if (window.lucide) {
+        window.lucide.createIcons();
+    }
     
     // Handle mark as read buttons
     document.querySelectorAll('.mark-read-btn').forEach(button => {
         button.addEventListener('click', function() {
             const notificationId = this.dataset.notificationId;
+            const markReadUrl = this.dataset.markReadUrl;
             const notificationItem = this.closest('.notification-item');
             
-            fetch(`/mark-notification-read/${notificationId}/`, {
+            fetch(markReadUrl, {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-CSRFToken': window.getCsrfToken ? window.getCsrfToken() : getCookie('csrftoken'),
                     'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                 }
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Unable to mark notification as read (${response.status})`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     notificationItem.classList.remove('unread');
@@ -295,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const unreadCount = document.querySelector('.status-badge.status-info');
                     if (unreadCount) {
                         const currentCount = parseInt(unreadCount.textContent);
-                        unreadCount.textContent = `${currentCount - 1} Unread`;
+                        unreadCount.textContent = `${Math.max(currentCount - 1, 0)} Unread`;
                     }
                 }
             })

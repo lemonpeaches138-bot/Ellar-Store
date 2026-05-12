@@ -30,15 +30,15 @@
         <div style="padding: var(--spacing-xl);">
             <!-- Tab Navigation -->
             <div style="display: flex; gap: var(--spacing-md); border-bottom: 2px solid var(--light-border); margin-bottom: var(--spacing-2xl); flex-wrap: wrap;">
-                <button class="tab-btn active" onclick="switchTab('profile')" style="padding: var(--spacing-md); border: none; background: none; cursor: pointer; font-weight: 600; color: var(--light-text); border-bottom: 3px solid transparent; margin-bottom: -2px;">
+                <button class="tab-btn active" onclick="switchTab('profile', this)" style="padding: var(--spacing-md); border: none; background: none; cursor: pointer; font-weight: 600; color: var(--light-text); border-bottom: 3px solid transparent; margin-bottom: -2px;">
                     <i data-lucide="user" style="width: 16px; height: 16px; display: inline-block; margin-right: var(--spacing-sm);"></i>
                     Profile
                 </button>
-                <button class="tab-btn" onclick="switchTab('theme')" style="padding: var(--spacing-md); border: none; background: none; cursor: pointer; font-weight: 600; color: var(--light-muted); border-bottom: 3px solid transparent; margin-bottom: -2px;">
+                <button class="tab-btn" onclick="switchTab('theme', this)" style="padding: var(--spacing-md); border: none; background: none; cursor: pointer; font-weight: 600; color: var(--light-muted); border-bottom: 3px solid transparent; margin-bottom: -2px;">
                     <i data-lucide="palette" style="width: 16px; height: 16px; display: inline-block; margin-right: var(--spacing-sm);"></i>
                     Theme
                 </button>
-                <button class="tab-btn" onclick="switchTab('security')" style="padding: var(--spacing-md); border: none; background: none; cursor: pointer; font-weight: 600; color: var(--light-muted); border-bottom: 3px solid transparent; margin-bottom: -2px;">
+                <button class="tab-btn" onclick="switchTab('security', this)" style="padding: var(--spacing-md); border: none; background: none; cursor: pointer; font-weight: 600; color: var(--light-muted); border-bottom: 3px solid transparent; margin-bottom: -2px;">
                     <i data-lucide="lock" style="width: 16px; height: 16px; display: inline-block; margin-right: var(--spacing-sm);"></i>
                     Security
                 </button>
@@ -278,7 +278,7 @@
 </style>
 
 <script>
-    function switchTab(tabName) {
+    function switchTab(tabName, tabButton) {
         // Hide all tabs
         document.getElementById('profile-tab').style.display = 'none';
         document.getElementById('theme-tab').style.display = 'none';
@@ -289,7 +289,9 @@
 
         // Update button styles
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        event.target.closest('.tab-btn').classList.add('active');
+        if (tabButton) {
+            tabButton.classList.add('active');
+        }
     }
 
     const themeColors = {
@@ -311,7 +313,11 @@
                 ? '<i data-lucide="check" style="width: 24px; height: 24px; color: white;"></i>'
                 : '';
         });
-        lucide.createIcons();
+        if (window.renderIcons) {
+            window.renderIcons();
+        } else if (window.lucide) {
+            window.lucide.createIcons();
+        }
     }
 
     const primaryColorSelect = document.querySelector('select[name="theme-primary_color"]');
@@ -368,6 +374,10 @@
     document.querySelectorAll('.tab-btn')[0].classList.add('active');
 
     // Initialize lucide icons
-    lucide.createIcons();
+    if (window.renderIcons) {
+        window.renderIcons();
+    } else if (window.lucide) {
+        window.lucide.createIcons();
+    }
 </script>
 {% endblock %}

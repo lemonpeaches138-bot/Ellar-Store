@@ -48,10 +48,7 @@ class UserRegistrationForm(forms.ModelForm):
     
     class Meta:
         model = UserRegistration
-        fields = ['username', 'email', 'first_name', 'last_name', 'phone', 'location', 'branch', 'password']
-        widgets = {
-            'branch': forms.Select(attrs={'class': 'form-control'}),
-        }
+        fields = ['username', 'email', 'first_name', 'last_name', 'phone', 'location', 'password']
     
     def clean_username(self):
         username = self.cleaned_data.get('username')

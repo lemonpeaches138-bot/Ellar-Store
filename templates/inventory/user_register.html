@@ -332,20 +332,6 @@
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="{{ form.branch.id_for_label }}" class="form-label">Branch</label>
-                    {{ form.branch }}
-                    {% if form.branch.errors %}
-                    <div class="field-error">
-                        {% for error in form.branch.errors %}
-                        <div>{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-
             <button type="submit" class="btn btn-primary" style="width: 100%; padding: var(--spacing-lg); font-size: 1rem; font-weight: 600;">
                 <i data-lucide="user-plus" style="width: 20px; height: 20px; margin-right: var(--spacing-sm);"></i>
                 Submit Registration

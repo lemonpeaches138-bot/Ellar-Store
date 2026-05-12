@@ -16,6 +16,49 @@ Open:
 - App: http://127.0.0.1:8000/
 - Admin: http://127.0.0.1:8000/admin/
 
+## Deploying to Render
+
+Render's normal web-service filesystem is temporary. If this app uses the local
+`db.sqlite3` file in production, new products, sales, users, and settings can
+disappear after a redeploy or restart. Use Render Postgres instead.
+
+This repo includes a `render.yaml` Blueprint that creates:
+- a Python web service
+- a Render Postgres database
+- a `DATABASE_URL` environment variable connecting the app to that database
+
+Recommended deploy flow:
+
+```bash
+git add .
+git commit -m "Configure Render Postgres deployment"
+git push
+```
+
+Then in Render, create a new Blueprint from this repository. Render will use
+`bash build.sh` to install dependencies, collect static files, and run
+migrations.
+
+If you already created the web service manually, keep the service but add a
+Render Postgres database and set these values in the web service:
+
+```text
+Build Command: bash build.sh
+Start Command: python -m gunicorn config.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+DATABASE_URL: your Render Postgres internal connection string
+SECRET_KEY: a generated secret value
+DEBUG: false
+```
+
+After the first successful deploy, create your admin user in the Render Shell:
+
+```bash
+python manage.py createsuperuser
+```
+
+Existing data from an old SQLite `db.sqlite3` file is not automatically copied
+to Postgres. Export/import it with Django fixtures if you need to keep it.
+
 ## Features
 - Product list with SKU, quantity, price, and reorder level
 - Add, edit, and delete products

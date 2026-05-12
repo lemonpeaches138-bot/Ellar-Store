@@ -1,10 +1,12 @@
 import json
+from decimal import Decimal
 
 from django.test import TestCase
 from django.contrib.auth.models import User
 from django.urls import reverse
 
-from .models import Product, StockMovement, Transaction
+from .forms import UserRegistrationForm
+from .models import Notification, Product, StockMovement, Transaction, TransactionItem, UserRegistration
 
 
 class InventoryViewsTests(TestCase):
@@ -85,6 +87,59 @@ class InventoryViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Export Inventory to Excel")
         self.assertContains(response, "Print Report")
+
+    def test_reports_analytics_use_saved_system_data(self):
+        transaction = Transaction.objects.create(
+            transaction_id="TXNREPORT001",
+            subtotal="76.50",
+            discount="5.00",
+            total="71.50",
+            cash_received="100.00",
+            change="28.50",
+        )
+        TransactionItem.objects.create(
+            transaction=transaction,
+            product=self.product,
+            quantity=3,
+            unit_price="25.50",
+            subtotal="76.50",
+        )
+        StockMovement.objects.create(
+            product=self.product,
+            movement_type=StockMovement.MovementType.STOCK_OUT,
+            quantity=3,
+            note="POS sale",
+        )
+
+        response = self.client.get(reverse("inventory:reports"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_units_sold"], 3)
+        self.assertEqual(response.context["total_revenue"], Decimal("71.50"))
+        self.assertEqual(response.context["gross_revenue"], Decimal("76.50"))
+        self.assertEqual(response.context["total_discount"], Decimal("5.00"))
+        self.assertEqual(response.context["stock_out_units"], 3)
+        self.assertEqual(response.context["top_products"][0].id, self.product.id)
+        self.assertEqual(response.context["top_products"][0].sales_units, 3)
+        self.assertEqual(response.context["top_products"][0].sales_revenue, Decimal("76.50"))
+        self.assertIn(71.5, response.context["sales_trends"]["week"]["data"])
+        self.assertContains(response, "Sales Revenue Trend")
+        self.assertContains(response, "Product Count by Category")
+        self.assertNotContains(response, "[12000, 19000, 15000")
+
+    def test_pos_page_loads(self):
+        response = self.client.get(reverse("inventory:pos"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Point of Sale")
+        self.assertContains(response, reverse("inventory:pos-checkout"))
+
+    def test_settings_page_loads(self):
+        response = self.client.get(reverse("inventory:settings"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Theme Mode")
+        self.assertContains(response, reverse("inventory:api-update-theme"))
 
     def test_inventory_export_downloads_excel_file(self):
         response = self.client.get(reverse("inventory:inventory-export"))
@@ -167,6 +222,13 @@ class InventoryViewsTests(TestCase):
         self.assertContains(response, "background: var(--primary-gradient);")
         self.assertNotContains(response, "#667eea")
 
+    def test_pos_search_accepts_product_id_from_browser_cards(self):
+        response = self.client.get(reverse("inventory:pos-search"), {"q": str(self.product.id)})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
+        self.assertEqual(response.json()["product"]["id"], self.product.id)
+
 
 class StaffManagementTests(TestCase):
     def setUp(self):
@@ -215,3 +277,101 @@ class StaffManagementTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertFalse(User.objects.filter(id=self.staff.id).exists())
+
+
+class NotificationAdminTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="renderadmin",
+            password="AdminPassword123!",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.staff = User.objects.create_user(
+            username="cashier",
+            password="CashierPassword123!",
+            is_staff=True,
+        )
+        self.notification = Notification.objects.create(
+            type=Notification.NotificationType.SALE,
+            title="Sale Completed",
+            message="A sale was completed.",
+            created_by=self.staff,
+        )
+        self.client.force_login(self.admin)
+
+    def test_superuser_with_any_username_sees_notification_ui(self):
+        response = self.client.get(reverse("inventory:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="notificationBtn"')
+        self.assertContains(response, reverse("inventory:api-notifications"))
+
+    def test_superuser_with_any_username_can_load_and_mark_notifications(self):
+        response = self.client.get(reverse("inventory:api-notifications"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["unread_count"], 1)
+
+        response = self.client.post(
+            reverse("inventory:mark-notification-read", kwargs={"notification_id": self.notification.id}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.notification.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
+        self.assertTrue(self.notification.is_read)
+
+    def test_notifications_page_loads_for_superuser_with_any_username(self):
+        response = self.client.get(reverse("inventory:notifications"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "System Notifications")
+        self.assertContains(
+            response,
+            reverse("inventory:mark-notification-read", kwargs={"notification_id": self.notification.id}),
+        )
+
+    def test_login_creates_notification_without_legacy_admin_username(self):
+        self.client.logout()
+
+        response = self.client.post(
+            reverse("inventory:login"),
+            {"username": self.staff.username, "password": "CashierPassword123!"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Notification.objects.filter(title=f"Staff Login: {self.staff.username}").exists())
+
+
+class StaffRegistrationTests(TestCase):
+    def test_staff_registration_form_does_not_show_branch(self):
+        form = UserRegistrationForm()
+
+        self.assertNotIn("branch", form.fields)
+
+        response = self.client.get(reverse("inventory:register"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Branch")
+        self.assertNotContains(response, 'name="branch"')
+
+    def test_staff_registration_saves_with_default_branch(self):
+        response = self.client.post(
+            reverse("inventory:register"),
+            {
+                "username": "newcashier",
+                "email": "newcashier@example.com",
+                "first_name": "New",
+                "last_name": "Cashier",
+                "phone": "09170000000",
+                "location": "Front counter",
+                "password": "StaffPassword123!",
+                "confirm_password": "StaffPassword123!",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        registration = UserRegistration.objects.get(username="newcashier")
+        self.assertEqual(registration.branch, "main")
