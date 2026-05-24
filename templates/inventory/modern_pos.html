@@ -27,36 +27,28 @@
             </div>
 
             <!-- Product Info Display -->
-            <div id="product_info" class="glass-card" style="display: none; padding: var(--spacing-xl); margin-bottom: var(--spacing-xl);">
-                <h4 style="margin-bottom: var(--spacing-lg); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Product Details</h4>
-                <div style="display: grid; gap: var(--spacing-md);">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: var(--light-muted);">Name:</span>
-                        <span id="product_name" style="font-weight: 600;">-</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: var(--light-muted);">SKU:</span>
-                        <span id="product_sku" style="font-weight: 600;">-</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: var(--light-muted);">Price:</span>
-                        <span id="product_price" style="font-weight: 600; color: #10b981;">₱0.00</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: var(--light-muted);">Available:</span>
-                        <span id="product_available" style="font-weight: 600;">0 units</span>
-                    </div>
-                </div>
+            <div id="product_info" class="glass-card pos-product-picker" style="display: none;">
+                <h4 style="margin-bottom: var(--spacing-md); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Similar Products Found</h4>
                 
-                <div style="margin-top: var(--spacing-xl); display: flex; gap: var(--spacing-md); align-items: center;">
-                    <label style="color: var(--light-muted); font-weight: 500;">Quantity:</label>
-                    <input type="number" id="quantity" value="1" min="1" 
-                           style="padding: var(--spacing-sm); border: 1px solid var(--light-border); border-radius: var(--radius-md); width: 100px;">
-                    <button onclick="addToCart()" class="btn btn-primary">
-                        <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
-                        Add to Cart
-                    </button>
+                <!-- Horizontal Table for Products -->
+                <div class="similar-products-scroll">
+                    <table class="modern-table pos-search-results-table" style="width: 100%; min-width: 760px;">
+                        <thead style="background: var(--light-surface);">
+                            <tr>
+                                <th style="text-align: left; padding: var(--spacing-md);">Product Name</th>
+                                <th style="text-align: center; padding: var(--spacing-md);">SKU</th>
+                                <th style="text-align: right; padding: var(--spacing-md);">Price</th>
+                                <th style="text-align: center; padding: var(--spacing-md);">Stock</th>
+                                <th style="text-align: center; padding: var(--spacing-md);">Qty</th>
+                                <th style="text-align: center; padding: var(--spacing-md);">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="similar_products_tbody">
+                            <!-- Products will be populated here -->
+                        </tbody>
+                    </table>
                 </div>
+                <input type="hidden" id="quantity" value="1" min="1">
             </div>
 
             <!-- Quick Actions -->
@@ -203,6 +195,43 @@
     height: calc(100vh - 200px);
 }
 
+.pos-product-picker {
+    height: min(430px, calc(100vh - 350px));
+    min-height: 280px;
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.similar-products-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    border: 1px solid var(--light-border);
+    border-radius: var(--radius-md);
+}
+
+.pos-search-results-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+}
+
+.pos-search-qty {
+    width: 76px;
+    padding: var(--spacing-sm);
+    border: 1px solid var(--light-border);
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.pos-search-add-btn {
+    padding: 6px 12px;
+    font-size: 0.875rem;
+    min-height: 36px;
+}
+
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -301,6 +330,16 @@ body.dark-mode .product-card {
     border-color: var(--dark-border);
 }
 
+body.dark-mode .similar-products-scroll {
+    border-color: var(--dark-border);
+}
+
+body.dark-mode .pos-search-qty {
+    background: var(--dark-bg);
+    border-color: var(--dark-border);
+    color: var(--dark-text);
+}
+
 .product-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
@@ -321,6 +360,74 @@ body.dark-mode .product-card {
 .product-card .stock {
     color: var(--light-muted);
     font-size: 0.75rem;
+}
+
+/* Similar Products Table Styling */
+#similar_products_tbody tr {
+    border-bottom: 1px solid var(--light-border);
+}
+
+#similar_products_tbody tr:last-child {
+    border-bottom: none;
+}
+
+body.dark-mode #similar_products_tbody tr {
+    border-bottom-color: var(--dark-border);
+}
+
+body.dark-mode #similar_products_tbody tr {
+    color: inherit;
+}
+
+.pos-search-result-row {
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.pos-search-result-row:hover {
+    background: var(--light-bg);
+}
+
+.pos-search-result-row.selected {
+    background: var(--primary-color);
+    color: white;
+}
+
+.pos-search-result-row.selected td {
+    color: white !important;
+}
+
+.pos-search-result-row.selected .pos-search-qty {
+    background: rgba(255, 255, 255, 0.96);
+    color: var(--light-text);
+    border-color: rgba(255, 255, 255, 0.8);
+}
+
+.similar-products-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.similar-products-scroll::-webkit-scrollbar-track {
+    background: var(--light-bg);
+    border-radius: 3px;
+}
+
+.similar-products-scroll::-webkit-scrollbar-thumb {
+    background: var(--light-border);
+    border-radius: 3px;
+}
+
+.similar-products-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--light-muted);
+}
+
+body.dark-mode .similar-products-scroll::-webkit-scrollbar-track {
+    background: var(--dark-bg);
+}
+
+body.dark-mode .similar-products-scroll::-webkit-scrollbar-thumb {
+    background: var(--dark-border);
 }
 
 /* Custom Scrollbar Styling */
@@ -383,6 +490,10 @@ body.dark-mode .cart-items-container::-webkit-scrollbar-thumb:hover {
     .product-grid {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     }
+
+    .pos-product-picker {
+        height: 360px;
+    }
 }
 </style>
 {% endblock %}
@@ -391,6 +502,7 @@ body.dark-mode .cart-items-container::-webkit-scrollbar-thumb:hover {
 <script>
 let cart = [];
 let currentProduct = null;
+let currentSearchProducts = [];
 const posSearchUrl = "{% url 'inventory:pos-search' %}";
 const posProductsUrl = "{% url 'inventory:pos-get-products' %}";
 const posCheckoutUrl = "{% url 'inventory:pos-checkout' %}";
@@ -420,7 +532,7 @@ function searchProduct() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                displayProductInfo(data.product);
+                displaySimilarProducts(data.products);
             } else {
                 showMessage(data.message || 'Product not found', 'error');
             }
@@ -431,52 +543,109 @@ function searchProduct() {
         });
 }
 
-function displayProductInfo(product) {
-    currentProduct = product;
-    document.getElementById('product_name').textContent = product.name;
-    document.getElementById('product_sku').textContent = product.sku;
-    document.getElementById('product_price').textContent = `₱${product.unit_price}`;
-    document.getElementById('product_available').textContent = `${product.quantity} units`;
-    document.getElementById('quantity').value = 1;
-    document.getElementById('quantity').max = product.quantity;
-    document.getElementById('product_info').style.display = 'block';
+function displaySimilarProducts(products) {
+    currentSearchProducts = products;
+    const tbody = document.getElementById('similar_products_tbody');
+    tbody.innerHTML = products.map((product, index) => `
+        <tr class="pos-search-result-row"
+            onclick="selectProductFromTable(${index})">
+            <td style="padding: var(--spacing-md); text-align: left; font-weight: 500;">${product.name}</td>
+            <td style="padding: var(--spacing-md); text-align: center; font-size: 0.875rem; color: var(--light-muted);">${product.sku}</td>
+            <td style="padding: var(--spacing-md); text-align: right; font-weight: 600; color: #10b981;">₱${product.unit_price.toFixed(2)}</td>
+            <td style="padding: var(--spacing-md); text-align: center;">${product.quantity} units</td>
+            <td style="padding: var(--spacing-md); text-align: center;">
+                <input type="number" id="search_qty_${index}" class="pos-search-qty" value="1" min="1" max="${product.quantity}" onclick="event.stopPropagation();" onkeydown="handleSearchQuantityKeydown(event, ${index});">
+            </td>
+            <td style="padding: var(--spacing-md); text-align: center;">
+                <button onclick="event.stopPropagation(); addProductFromRow(${index})" 
+                        class="btn btn-primary pos-search-add-btn">
+                    <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
+                    Add
+                </button>
+            </td>
+        </tr>
+    `).join('');
     
-    // Add animation
+    document.getElementById('product_info').style.display = 'flex';
     document.getElementById('product_info').style.animation = 'pulse 0.3s ease';
+    if (window.renderIcons) {
+        window.renderIcons();
+    } else if (window.lucide) {
+        window.lucide.createIcons();
+    }
 }
 
-function addToCart() {
-    if (!currentProduct) {
-        showMessage('Please select a product first', 'warning');
+function selectProductFromTable(index) {
+    const product = currentSearchProducts[index];
+    if (!product) return;
+
+    currentProduct = product;
+    const rowQuantityInput = document.getElementById(`search_qty_${index}`);
+    document.getElementById('quantity').value = rowQuantityInput ? rowQuantityInput.value : 1;
+    document.getElementById('quantity').max = product.quantity;
+    
+    // Highlight selected row
+    const rows = document.querySelectorAll('#similar_products_tbody tr');
+    rows.forEach((row, i) => {
+        row.classList.toggle('selected', i === index);
+    });
+}
+
+function addProductFromRow(index) {
+    const product = currentSearchProducts[index];
+    const rowQuantityInput = document.getElementById(`search_qty_${index}`);
+    addToCart(product, rowQuantityInput ? rowQuantityInput.value : 1);
+}
+
+function handleSearchQuantityKeydown(event, index) {
+    event.stopPropagation();
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        addProductFromRow(index);
+    }
+}
+
+function addToCart(product = currentProduct, quantityValue = null) {
+    if (!product) {
+        showMessage('Please select a product from the table', 'warning');
         return;
     }
 
-    const quantity = parseInt(document.getElementById('quantity').value);
-    if (quantity <= 0 || quantity > currentProduct.quantity) {
+    currentProduct = product;
+    if (quantityValue === null) {
+        const selectedIndex = currentSearchProducts.findIndex(item => item.id === product.id);
+        const selectedQuantityInput = selectedIndex >= 0 ? document.getElementById(`search_qty_${selectedIndex}`) : null;
+        if (selectedQuantityInput) {
+            quantityValue = selectedQuantityInput.value;
+        }
+    }
+    const quantity = parseInt(quantityValue !== null ? quantityValue : document.getElementById('quantity').value);
+    if (Number.isNaN(quantity) || quantity <= 0 || quantity > product.quantity) {
         showMessage('Invalid quantity', 'error');
         return;
     }
 
     // Check if product already in cart
-    const existingItem = cart.find(item => item.id === currentProduct.id);
+    const existingItem = cart.find(item => item.id === product.id);
     if (existingItem) {
-        if (existingItem.quantity + quantity > currentProduct.quantity) {
+        if (existingItem.quantity + quantity > product.quantity) {
             showMessage('Insufficient stock', 'error');
             return;
         }
         existingItem.quantity += quantity;
     } else {
         cart.push({
-            id: currentProduct.id,
-            name: currentProduct.name,
-            price: currentProduct.unit_price,
-            quantity: quantity
+            id: product.id,
+            name: product.name,
+            price: product.unit_price,
+            quantity: quantity,
+            max_quantity: product.quantity
         });
     }
 
     updateCart();
     clearProductInfo();
-    showMessage('Product added to cart', 'success');
+    showMessage(`${product.name} added to cart`, 'success');
 }
 
 function updateCart() {
@@ -522,6 +691,9 @@ function updateQuantity(index, newQuantity) {
     const quantity = parseInt(newQuantity);
     if (quantity <= 0) {
         removeFromCart(index);
+    } else if (cart[index].max_quantity && quantity > cart[index].max_quantity) {
+        showMessage('Insufficient stock', 'error');
+        updateCart();
     } else {
         cart[index].quantity = quantity;
         updateCart();
@@ -564,7 +736,9 @@ function clearCart() {
 function clearProductInfo() {
     document.getElementById('product_info').style.display = 'none';
     document.getElementById('product_search').value = '';
+    document.getElementById('similar_products_tbody').innerHTML = '';
     currentProduct = null;
+    currentSearchProducts = [];
 }
 
 function checkout() {
@@ -668,9 +842,13 @@ function selectProduct(productId) {
     })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                displayProductInfo(data.product);
+            if (data.success && data.products && data.products.length > 0) {
+                displaySimilarProducts(data.products);
                 closeProductBrowser();
+                // Automatically select the first product if only one found
+                if (data.products.length === 1) {
+                    selectProductFromTable(0);
+                }
             }
         });
 }

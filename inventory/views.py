@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from functools import wraps
 import json
 
 from django.contrib import messages
@@ -7,7 +8,8 @@ from django.contrib.auth import authenticate, login, logout, password_validation
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum
+from django.db.models import Case, DecimalField, ExpressionWrapper, F, IntegerField, OuterRef, Q, Subquery, Sum, Value, When
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -16,8 +18,11 @@ from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 import uuid
 
-from .forms import ProductForm, StockMovementForm, UserRegistrationForm
+from .forms import ProductForm, StaffEditForm, StockMovementForm, UserRegistrationForm
 from .models import Product, StockMovement, Transaction, TransactionItem, UserRegistration, Notification, UserProfile
+
+
+CASHIER_MAX_DISCOUNT_RATE = Decimal("0.10")
 
 
 def is_staff(user):
@@ -28,6 +33,57 @@ def is_staff(user):
 def is_system_admin(user):
     """Return True for users allowed to manage system-level admin features."""
     return user.is_authenticated and (user.is_superuser or user.username == 'EllarMiniMart')
+
+
+def _staff_role(user):
+    if not user.is_authenticated:
+        return None
+    return _get_user_profile(user).staff_role
+
+
+def _has_staff_role(user, *roles):
+    if is_system_admin(user):
+        return True
+    return user.is_authenticated and user.is_staff and _staff_role(user) in roles
+
+
+def _default_role_redirect_name(user):
+    if is_system_admin(user):
+        return "inventory:dashboard"
+    if _staff_role(user) == UserProfile.StaffRole.INVENTORY:
+        return "inventory:product-list"
+    return "inventory:pos"
+
+
+def _role_denied_response(request):
+    message = "You do not have access to that area."
+    if request.headers.get("x-requested-with") == "XMLHttpRequest" or request.content_type == "application/json":
+        return JsonResponse({"success": False, "message": message}, status=403)
+    messages.error(request, message)
+    return redirect(_default_role_redirect_name(request.user))
+
+
+def staff_role_required(*roles):
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            if _has_staff_role(request.user, *roles):
+                return view_func(request, *args, **kwargs)
+            return _role_denied_response(request)
+
+        return wrapper
+
+    return decorator
+
+
+def system_admin_required(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if is_system_admin(request.user):
+            return view_func(request, *args, **kwargs)
+        return _role_denied_response(request)
+
+    return wrapper
 
 
 def _get_user_profile(user):
@@ -107,6 +163,122 @@ def _sales_trends_from_transactions():
     }
 
 
+def _product_activity_queryset(products=None):
+    """Annotate products with sales, stock-in, and restock priority metrics."""
+    products = products if products is not None else Product.objects.all()
+    integer_field = IntegerField()
+    money_field = DecimalField(max_digits=12, decimal_places=2)
+
+    sales_units = (
+        TransactionItem.objects.filter(product=OuterRef("pk"))
+        .values("product")
+        .annotate(total=Sum("quantity"))
+        .values("total")
+    )
+    sales_revenue = (
+        TransactionItem.objects.filter(product=OuterRef("pk"))
+        .values("product")
+        .annotate(total=Sum("subtotal"))
+        .values("total")
+    )
+    bought_units = (
+        StockMovement.objects.filter(
+            product=OuterRef("pk"),
+            movement_type=StockMovement.MovementType.STOCK_IN,
+        )
+        .values("product")
+        .annotate(total=Sum("quantity"))
+        .values("total")
+    )
+
+    return (
+        products.annotate(
+            sales_units=Coalesce(Subquery(sales_units, output_field=integer_field), Value(0)),
+            sales_revenue=Coalesce(
+                Subquery(sales_revenue, output_field=money_field),
+                Value(Decimal("0.00")),
+                output_field=money_field,
+            ),
+            bought_units=Coalesce(Subquery(bought_units, output_field=integer_field), Value(0)),
+        )
+        .annotate(
+            restock_target=ExpressionWrapper(F("reorder_level") * 2, output_field=integer_field),
+        )
+        .annotate(
+            recommended_buy_qty=Case(
+                When(
+                    quantity__lt=F("restock_target"),
+                    then=ExpressionWrapper(F("restock_target") - F("quantity"), output_field=integer_field),
+                ),
+                default=Value(0),
+                output_field=integer_field,
+            ),
+            restock_priority=Case(
+                When(quantity__lte=F("reorder_level"), then=Value(0)),
+                When(quantity__lt=F("restock_target"), then=Value(1)),
+                default=Value(2),
+                output_field=integer_field,
+            ),
+        )
+    )
+
+
+def _stock_priority_report_data(products=None):
+    products = _product_activity_queryset(products)
+    low_stock_items = list(
+        products.filter(quantity__lte=F("reorder_level"))
+        .order_by("quantity", "-sales_units", "name")[:15]
+    )
+    top_need_buying = list(
+        products.filter(Q(quantity__lte=F("reorder_level")) | Q(quantity__lt=F("restock_target"), sales_units__gt=0))
+        .order_by("restock_priority", "-sales_units", "quantity", "name")[:15]
+    )
+    least_bought_sold_products = list(
+        products.filter(quantity__gt=0)
+        .order_by("sales_units", "bought_units", "-quantity", "name")[:15]
+    )
+
+    restock_chart_data = {
+        "labels": [product.name for product in top_need_buying[:8]],
+        "sold": [product.sales_units for product in top_need_buying[:8]],
+        "recommended": [product.recommended_buy_qty for product in top_need_buying[:8]],
+    }
+
+    return {
+        "low_stock_items": low_stock_items,
+        "top_need_buying": top_need_buying,
+        "least_bought_sold_products": least_bought_sold_products,
+        "least_sold_products": least_bought_sold_products,
+        "restock_chart_data": restock_chart_data,
+    }
+
+
+def _restock_action(product):
+    if product.quantity <= product.reorder_level:
+        return "Buy urgently"
+    if product.recommended_buy_qty > 0 and product.sales_units > 0:
+        return "Buy soon"
+    if product.sales_units == 0:
+        return "Slow moving"
+    return "Monitor"
+
+
+def _cashier_discount_limit(subtotal):
+    return (subtotal * CASHIER_MAX_DISCOUNT_RATE).quantize(Decimal("0.01"))
+
+
+def _discount_error(user, discount, subtotal):
+    if discount < 0:
+        return "Discount cannot be negative"
+    if discount > subtotal:
+        return "Discount cannot exceed subtotal"
+    if not is_system_admin(user) and _staff_role(user) == UserProfile.StaffRole.CASHIER:
+        max_discount = _cashier_discount_limit(subtotal)
+        if discount > max_discount:
+            return f"Cashier discount limit is {CASHIER_MAX_DISCOUNT_RATE:.0%} of subtotal."
+    return None
+
+
 def login_view(request):
     """Handle user login."""
     if request.method == "POST":
@@ -126,7 +298,7 @@ def login_view(request):
                     created_by=user,
                 )
 
-                return redirect("inventory:dashboard")
+                return redirect(_default_role_redirect_name(user))
             else:
                 messages.error(request, "Only staff members can access this application.")
         else:
@@ -169,13 +341,14 @@ def register_user(request):
 def index_redirect(request):
     """Redirect root path to dashboard or login based on auth status."""
     if request.user.is_authenticated and request.user.is_staff:
-        return redirect("inventory:dashboard")
+        return redirect(_default_role_redirect_name(request.user))
     else:
         return redirect("inventory:login")
 
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def dashboard(request):
     products = Product.objects.all()
     low_stock = products.filter(quantity__lte=F("reorder_level"))
@@ -273,6 +446,7 @@ def dashboard(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.INVENTORY)
 def product_list(request):
     products = Product.objects.all()
     selected_product_type = request.GET.get("type", "")
@@ -286,6 +460,9 @@ def product_list(request):
     total_sold = sum(product.total_sold for product in products)
     products_with_sales = products.filter(total_sold__gt=0).count()
     top_selling_product = products.order_by('-total_sold').first()
+    
+    # Calculate low stock count
+    low_stock_count = products.filter(quantity__lte=F("reorder_level")).count()
 
     context = {
         "products": products,
@@ -294,12 +471,17 @@ def product_list(request):
         "total_sold": total_sold,
         "products_with_sales": products_with_sales,
         "top_selling_product": top_selling_product,
+        "low_stock_count": low_stock_count,
+        "can_manage_products": is_system_admin(request.user),
+        "can_adjust_stock": _has_staff_role(request.user, UserProfile.StaffRole.INVENTORY),
+        "can_view_product_financials": is_system_admin(request.user),
     }
     return render(request, "inventory/modern_product_list.html", context)
 
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def product_create(request):
     form = ProductForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -311,6 +493,7 @@ def product_create(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def product_update(request, pk):
     product = get_object_or_404(Product, pk=pk)
     form = ProductForm(request.POST or None, instance=product)
@@ -323,6 +506,7 @@ def product_update(request, pk):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def product_delete(request, pk):
     product = get_object_or_404(Product, pk=pk)
     if request.method == "POST":
@@ -334,6 +518,7 @@ def product_delete(request, pk):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.INVENTORY)
 def stock_adjust(request, pk):
     product = get_object_or_404(Product, pk=pk)
     form = StockMovementForm(request.POST or None)
@@ -397,6 +582,7 @@ def stock_adjust(request, pk):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def reports(request):
     products = Product.objects.all()
     transactions = Transaction.objects.all()
@@ -429,14 +615,12 @@ def reports(request):
     stock_in_units = stock_in_movements.aggregate(total=Sum("quantity"))["total"] or 0
     stock_out_units = stock_out_movements.aggregate(total=Sum("quantity"))["total"] or 0
 
+    product_activity = _product_activity_queryset(products)
     top_products = (
-        products.annotate(
-            sales_units=Sum("transactionitem__quantity"),
-            sales_revenue=Sum("transactionitem__subtotal"),
-        )
-        .filter(sales_units__gt=0)
+        product_activity.filter(sales_units__gt=0)
         .order_by("-sales_units", "-sales_revenue", "name")[:10]
     )
+    stock_priority_data = _stock_priority_report_data(products)
 
     product_type_counts = {}
     for choice in Product.ProductType.choices:
@@ -468,6 +652,10 @@ def reports(request):
         "stock_out_units": stock_out_units,
         "total_movements": total_movements,
         "top_products": top_products,
+        "low_stock_items": stock_priority_data["low_stock_items"],
+        "top_need_buying": stock_priority_data["top_need_buying"],
+        "least_sold_products": stock_priority_data["least_sold_products"],
+        "least_bought_sold_products": stock_priority_data["least_bought_sold_products"],
         "product_type_counts": product_type_counts,
         "product_type_counts_json": json.dumps(product_type_counts),
         "sales_trends": sales_trends,
@@ -512,6 +700,7 @@ def _excel_response(filename, title, headers, rows):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def inventory_export(request):
     headers = [
         "SKU",
@@ -547,45 +736,75 @@ def inventory_export(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.INVENTORY)
 def stock_report(request):
-    movements = StockMovement.objects.select_related("product")
-    stock_in_total = movements.filter(movement_type=StockMovement.MovementType.STOCK_IN).aggregate(
-        total=Sum("quantity")
-    )["total"] or 0
-    stock_out_total = movements.filter(movement_type=StockMovement.MovementType.STOCK_OUT).aggregate(
-        total=Sum("quantity")
-    )["total"] or 0
+    products = Product.objects.all()
+    stock_priority_data = _stock_priority_report_data(products)
+    total_units_sold = TransactionItem.objects.aggregate(total=Sum("quantity"))["total"] or 0
+    total_units_bought = StockMovement.objects.filter(
+        movement_type=StockMovement.MovementType.STOCK_IN
+    ).aggregate(total=Sum("quantity"))["total"] or 0
+    low_stock_count = products.filter(quantity__lte=F("reorder_level")).count()
 
     context = {
-        "movements": movements,
-        "total_movements": movements.count(),
-        "stock_in_total": stock_in_total,
-        "stock_out_total": stock_out_total,
-        "net_movement": stock_in_total - stock_out_total,
+        "total_products": products.count(),
+        "low_stock_count": low_stock_count,
+        "restock_candidate_count": len(stock_priority_data["top_need_buying"]),
+        "total_units_sold": total_units_sold,
+        "total_units_bought": total_units_bought,
+        "low_stock_items": stock_priority_data["low_stock_items"],
+        "top_need_buying": stock_priority_data["top_need_buying"],
+        "least_bought_sold_products": stock_priority_data["least_bought_sold_products"],
+        "restock_chart_json": json.dumps(stock_priority_data["restock_chart_data"]),
+        "can_view_financials": is_system_admin(request.user),
     }
     return render(request, "inventory/modern_stock_report.html", context)
 
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.INVENTORY)
 def stock_export(request):
-    headers = ["Date", "SKU", "Product", "Type", "Quantity", "Note"]
-    rows = [
-        [
-            movement.created_at.strftime("%Y-%m-%d %H:%M"),
-            movement.product.sku,
-            movement.product.name,
-            movement.get_movement_type_display(),
-            movement.quantity,
-            movement.note or "-",
-        ]
-        for movement in StockMovement.objects.select_related("product")
+    products = _product_activity_queryset(Product.objects.all()).order_by(
+        "restock_priority", "-sales_units", "bought_units", "name"
+    )
+    include_financials = is_system_admin(request.user)
+    headers = [
+        "SKU",
+        "Product",
+        "Category",
+        "Current Stock",
+        "Reorder Level",
+        "Recommended Buy Qty",
+        "Units Sold",
+        "Units Bought",
+        "Action",
     ]
-    return _excel_response("stock-report.xls", "Stock Report", headers, rows)
+    if include_financials:
+        headers[-1:-1] = ["Purchase Price", "Selling Price"]
+
+    rows = []
+    for product in products:
+        row = [
+            product.sku,
+            product.name,
+            product.get_product_type_display(),
+            product.quantity,
+            product.reorder_level,
+            product.recommended_buy_qty,
+            product.sales_units,
+            product.bought_units,
+        ]
+        if include_financials:
+            row.extend([product.purchase_price, product.unit_price])
+        row.append(_restock_action(product))
+        rows.append(row)
+    return _excel_response("stock-report.xls", "Stock Priority Report", headers, rows)
 
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def admin_profile(request):
     """Display the admin user profile."""
     user = request.user
@@ -609,6 +828,7 @@ def admin_profile(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def user_approvals(request):
     """Display and handle user registration approvals."""
     if not is_system_admin(request.user):
@@ -625,6 +845,7 @@ def user_approvals(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def approve_user(request, registration_id):
     """Approve a user registration."""
     if not is_system_admin(request.user):
@@ -646,6 +867,10 @@ def approve_user(request, registration_id):
         # Set the hashed password directly
         user.password = registration.password
         user.save()
+        profile = _get_user_profile(user)
+        profile.staff_role = registration.staff_role
+        profile.address = registration.location
+        profile.save(update_fields=["staff_role", "address", "updated_at"])
 
         # Mark registration as approved
         registration.is_approved = True
@@ -661,6 +886,7 @@ def approve_user(request, registration_id):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def reject_user(request, registration_id):
     """Reject a user registration."""
     if not is_system_admin(request.user):
@@ -680,19 +906,58 @@ def reject_user(request, registration_id):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def staff_list(request):
     """Display all staff members in the system."""
-    staff_members = User.objects.filter(is_staff=True).order_by('-date_joined')
+    staff_members = list(User.objects.filter(is_staff=True).order_by('-date_joined'))
+    for staff_user in staff_members:
+        _get_user_profile(staff_user)
 
     context = {
         "staff_members": staff_members,
-        "total_staff": staff_members.count(),
+        "total_staff": len(staff_members),
     }
     return render(request, "inventory/staff_list.html", context)
 
 
+def _add_form_errors_to_messages(request, form):
+    for field_name, errors in form.errors.items():
+        field = form.fields.get(field_name)
+        label = field.label if field else ""
+        for error in errors:
+            messages.error(request, f"{label}: {error}" if label else error)
+
+
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
+def staff_edit(request, staff_id):
+    """Allow the system admin to edit a staff member account and profile."""
+    if not is_system_admin(request.user):
+        messages.error(request, "Only a system admin can edit staff members.")
+        return redirect("inventory:dashboard")
+
+    staff_user = get_object_or_404(User, id=staff_id, is_staff=True)
+
+    if staff_user.username == 'EllarMiniMart' or staff_user.is_superuser:
+        messages.error(request, "The system admin account cannot be managed here.")
+        return redirect("inventory:staff-list")
+
+    if request.method == "POST":
+        _get_user_profile(staff_user)
+        form = StaffEditForm(request.POST, staff_user=staff_user)
+        if form.is_valid():
+            staff_user = form.save()
+            messages.success(request, f"{staff_user.username}'s staff details have been updated.")
+        else:
+            _add_form_errors_to_messages(request, form)
+
+    return redirect("inventory:staff-list")
+
+
+@login_required(login_url="inventory:login")
+@user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def staff_set_password(request, staff_id):
     """Allow the system admin to reset a staff member password."""
     if not is_system_admin(request.user):
@@ -728,6 +993,7 @@ def staff_set_password(request, staff_id):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def staff_remove(request, staff_id):
     """Remove a staff member from the system."""
     if not is_system_admin(request.user):
@@ -749,6 +1015,7 @@ def staff_remove(request, staff_id):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def notifications(request):
     """Display system notifications for admin."""
     if not is_system_admin(request.user):
@@ -767,6 +1034,7 @@ def notifications(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def mark_notification_read(request, notification_id):
     """Mark a notification as read."""
     if request.method != 'POST':
@@ -784,6 +1052,27 @@ def mark_notification_read(request, notification_id):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
+def mark_all_notifications_read(request):
+    """Mark all unread notifications as read."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Only POST allowed'}, status=405)
+
+    if not is_system_admin(request.user):
+        return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
+
+    marked_count = Notification.objects.filter(is_read=False).update(is_read=True)
+
+    return JsonResponse({
+        'success': True,
+        'marked_count': marked_count,
+        'unread_count': 0,
+    })
+
+
+@login_required(login_url="inventory:login")
+@user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def api_notifications(request):
     """API endpoint for notifications."""
     if not is_system_admin(request.user):
@@ -812,6 +1101,7 @@ def api_notifications(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.CASHIER)
 def pos(request):
     """Point of Sale main page."""
     cart = request.session.get('cart', {})
@@ -824,8 +1114,18 @@ def pos(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.CASHIER)
+def sales_history(request):
+    """Basic sales history for cashier transaction lookup."""
+    transactions = Transaction.objects.prefetch_related("items", "items__product").order_by("-created_at")[:50]
+    return render(request, "inventory/sales_history.html", {"transactions": transactions})
+
+
+@login_required(login_url="inventory:login")
+@user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.CASHIER)
 def pos_search_product(request):
-    """Search product by SKU, barcode, or name."""
+    """Search product by SKU, barcode, or name and return similar products."""
     query = request.GET.get('q', '').strip()
 
     if not query:
@@ -835,19 +1135,26 @@ def pos_search_product(request):
     if query.isdigit():
         product_filter |= Q(pk=int(query))
 
-    products = Product.objects.filter(quantity__gt=0).filter(product_filter)
+    products = Product.objects.filter(quantity__gt=0).filter(product_filter).order_by('name')
 
     if products.exists():
-        product = products.first()
-        return JsonResponse({
-            'success': True,
-            'product': {
+        # Return all similar products
+        products_data = []
+        for product in products:
+            products_data.append({
                 'id': product.id,
                 'name': product.name,
                 'sku': product.sku,
                 'unit_price': float(product.unit_price),
-                'quantity': product.quantity
-            }
+                'quantity': product.quantity,
+                'product_type': product.get_product_type_display()
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'product': products_data[0],
+            'products': products_data,
+            'count': len(products_data)
         })
     else:
         return JsonResponse({'success': False, 'message': 'Product not found or out of stock'})
@@ -855,6 +1162,7 @@ def pos_search_product(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.CASHIER)
 def pos_get_products(request):
     """Get products filtered by type for POS browser."""
     product_type = request.GET.get('type', '')
@@ -884,6 +1192,7 @@ def pos_get_products(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.CASHIER)
 def pos_add_item(request):
     """Add item to cart."""
     if request.method != 'POST':
@@ -946,6 +1255,7 @@ def pos_add_item(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.CASHIER)
 def pos_remove_item(request):
     """Remove item from cart."""
     if request.method != 'POST':
@@ -986,6 +1296,7 @@ def pos_remove_item(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.CASHIER)
 def pos_update_quantity(request):
     """Update item quantity in cart."""
     if request.method != 'POST':
@@ -1041,6 +1352,7 @@ def pos_update_quantity(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.CASHIER)
 def pos_apply_discount(request):
     """Apply discount to cart."""
     if request.method != 'POST':
@@ -1057,13 +1369,14 @@ def pos_apply_discount(request):
         if not cart:
             return JsonResponse({'success': False, 'message': 'Cart is empty'})
 
-        subtotal = sum(item['price'] * item['quantity'] for item in cart.values())
+        subtotal = sum(
+            Decimal(str(item['price'])) * Decimal(str(item['quantity']))
+            for item in cart.values()
+        )
 
-        if discount > subtotal:
-            return JsonResponse({'success': False, 'message': 'Discount cannot exceed subtotal'})
-
-        if discount < 0:
-            return JsonResponse({'success': False, 'message': 'Discount cannot be negative'})
+        discount_error = _discount_error(request.user, discount, subtotal)
+        if discount_error:
+            return JsonResponse({'success': False, 'message': discount_error})
 
         request.session['discount'] = float(discount)
         total = subtotal - discount
@@ -1084,6 +1397,7 @@ def pos_apply_discount(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.CASHIER)
 def pos_checkout(request):
     """Process payment and create transaction."""
     if request.method != 'POST':
@@ -1114,6 +1428,10 @@ def pos_checkout(request):
                 subtotal += product.unit_price * Decimal(str(item['quantity']))
             except Product.DoesNotExist:
                 return JsonResponse({'success': False, 'message': f'Product {item["product_id"]} not found'})
+
+        discount_error = _discount_error(request.user, discount, subtotal)
+        if discount_error:
+            return JsonResponse({'success': False, 'message': discount_error})
 
         total = subtotal - discount
 
@@ -1189,6 +1507,7 @@ def pos_checkout(request):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@staff_role_required(UserProfile.StaffRole.CASHIER)
 @xframe_options_sameorigin
 def pos_receipt(request, transaction_id):
     """Display transaction receipt."""
@@ -1203,6 +1522,7 @@ def pos_receipt(request, transaction_id):
 
 @login_required(login_url="inventory:login")
 @user_passes_test(is_staff, login_url="inventory:login")
+@system_admin_required
 def settings_view(request):
     """User settings page with theme customization and profile management."""
     from .forms import ThemePreferenceForm, PasswordChangeForm, UserProfileForm
@@ -1303,5 +1623,227 @@ def api_update_theme(request):
             'message': 'Theme updated successfully',
             'config': profile.theme_config
         })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+
+# Chat Views
+from .models import Chat, ChatReadState, Message
+
+
+def _get_chat_unread_count(chat, user):
+    """Return unread message count for a user in a chat."""
+    unread_messages = chat.messages.exclude(sender=user)
+    read_state = ChatReadState.objects.filter(chat=chat, user=user).first()
+    if read_state:
+        unread_messages = unread_messages.filter(created_at__gt=read_state.last_read_at)
+    return unread_messages.count()
+
+
+@login_required(login_url="inventory:login")
+@user_passes_test(is_staff, login_url="inventory:login")
+def api_get_chats(request):
+    """API endpoint to get all chats for the current user."""
+    try:
+        user_chats = Chat.objects.filter(participants=request.user).prefetch_related('participants', 'messages').order_by('-updated_at')
+        
+        chats_data = []
+        unread_total = 0
+        for chat in user_chats:
+            last_message = chat.messages.last()
+            unread_count = _get_chat_unread_count(chat, request.user)
+            unread_total += unread_count
+            chats_data.append({
+                'id': chat.id,
+                'name': chat.get_display_name(request.user),
+                'chat_type': chat.chat_type,
+                'last_message': last_message.content[:100] if last_message else 'No messages yet',
+                'last_message_time': last_message.created_at.isoformat() if last_message else None,
+                'last_message_sender': last_message.sender.username if last_message else None,
+                'unread_count': unread_count,
+            })
+        
+        return JsonResponse({'success': True, 'chats': chats_data, 'unread_total': unread_total})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+
+@login_required(login_url="inventory:login")
+@user_passes_test(is_staff, login_url="inventory:login")
+def api_get_or_create_group_chat(request):
+    """API endpoint to get or create the group chat with all employees."""
+    try:
+        # Get or create the 'All Employees' chat
+        chat, created = Chat.objects.get_or_create(
+            name='All Employees',
+            chat_type=Chat.ChatType.GROUP,
+            defaults={'chat_type': Chat.ChatType.GROUP}
+        )
+        
+        # Add all active staff members to the chat
+        all_staff = User.objects.filter(is_staff=True)
+        chat.participants.set(all_staff)
+        
+        return JsonResponse({
+            'success': True,
+            'chat_id': chat.id,
+            'created': created
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+
+@login_required(login_url="inventory:login")
+@user_passes_test(is_staff, login_url="inventory:login")
+def api_get_messages(request, chat_id):
+    """API endpoint to get messages in a specific chat."""
+    try:
+        chat = Chat.objects.get(id=chat_id, participants=request.user)
+        messages = chat.messages.all().order_by('created_at')
+        
+        messages_data = [
+            {
+                'id': msg.id,
+                'sender': msg.sender.get_full_name() or msg.sender.username,
+                'sender_username': msg.sender.username,
+                'sender_id': msg.sender.id,
+                'content': msg.content,
+                'created_at': msg.created_at.isoformat(),
+                'is_own': msg.sender.id == request.user.id,
+            }
+            for msg in messages
+        ]
+        
+        # Mark messages as read
+        chat.messages.filter(is_read=False).exclude(sender=request.user).update(is_read=True)
+        last_message = messages.last()
+        ChatReadState.objects.update_or_create(
+            chat=chat,
+            user=request.user,
+            defaults={'last_read_at': last_message.created_at if last_message else timezone.now()},
+        )
+        
+        return JsonResponse({'success': True, 'messages': messages_data})
+    except Chat.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Chat not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+
+@login_required(login_url="inventory:login")
+@user_passes_test(is_staff, login_url="inventory:login")
+def api_send_message(request, chat_id):
+    """API endpoint to send a message in a specific chat."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Only POST allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        content = data.get('content', '').strip()
+        
+        if not content:
+            return JsonResponse({'success': False, 'message': 'Message cannot be empty'}, status=400)
+        
+        chat = Chat.objects.get(id=chat_id, participants=request.user)
+        message = Message.objects.create(
+            chat=chat,
+            sender=request.user,
+            content=escape(content)
+        )
+        
+        # Update chat's updated_at timestamp
+        chat.updated_at = timezone.now()
+        chat.save(update_fields=['updated_at'])
+        
+        return JsonResponse({
+            'success': True,
+            'message': {
+                'id': message.id,
+                'sender': message.sender.get_full_name() or message.sender.username,
+                'sender_username': message.sender.username,
+                'content': message.content,
+                'created_at': message.created_at.isoformat(),
+            }
+        })
+    except Chat.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Chat not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+
+@login_required(login_url="inventory:login")
+@user_passes_test(is_staff, login_url="inventory:login")
+def api_delete_chat(request, chat_id):
+    """API endpoint to delete a direct chat conversation."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Only POST allowed'}, status=405)
+
+    try:
+        chat = Chat.objects.get(id=chat_id, participants=request.user)
+        if chat.chat_type == Chat.ChatType.GROUP:
+            return JsonResponse(
+                {'success': False, 'message': 'The all-staff chat cannot be deleted.'},
+                status=400,
+            )
+
+        chat.delete()
+        return JsonResponse({'success': True, 'deleted_chat_id': chat_id})
+    except Chat.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Chat not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+
+@login_required(login_url="inventory:login")
+@user_passes_test(is_staff, login_url="inventory:login")
+def api_get_or_create_direct_chat(request, user_id):
+    """API endpoint to get or create a direct chat with another user."""
+    try:
+        other_user = User.objects.get(id=user_id, is_staff=True)
+        
+        # Find existing direct chat between these two users
+        chat = Chat.objects.filter(
+            chat_type=Chat.ChatType.DIRECT,
+            participants=request.user
+        ).filter(participants=other_user).first()
+        
+        if not chat:
+            # Create new direct chat
+            chat = Chat.objects.create(chat_type=Chat.ChatType.DIRECT)
+            chat.participants.set([request.user, other_user])
+        
+        return JsonResponse({
+            'success': True,
+            'chat_id': chat.id,
+            'chat_name': other_user.get_full_name() or other_user.username
+        })
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+
+@login_required(login_url="inventory:login")
+@user_passes_test(is_staff, login_url="inventory:login")
+def api_get_staff_members(request):
+    """API endpoint to get list of available staff members for direct chats."""
+    try:
+        # Get all staff members except the current user
+        staff_members = User.objects.filter(is_staff=True).exclude(id=request.user.id).values(
+            'id', 'username', 'first_name', 'last_name', 'email'
+        ).order_by('first_name', 'last_name')
+        
+        staff_data = []
+        for staff in staff_members:
+            display_name = (f"{staff['first_name']} {staff['last_name']}".strip() 
+                          or staff['username'])
+            staff_data.append({
+                'id': staff['id'],
+                'username': staff['username'],
+                'display_name': display_name,
+                'email': staff['email'],
+            })
+        
+        return JsonResponse({'success': True, 'staff_members': staff_data})
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=400)

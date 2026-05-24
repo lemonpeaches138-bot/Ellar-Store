@@ -132,31 +132,63 @@
     <div class="modern-table-container">
         <div class="table-header">
             <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: var(--spacing-sm);">
-                <i data-lucide="activity" style="width: 20px; height: 20px;"></i>
-                Stock Movement Report
+                <i data-lucide="alert-triangle" style="width: 20px; height: 20px; color: #f59e0b;"></i>
+                Low Stock Items Report
             </h3>
         </div>
         <div style="padding: var(--spacing-xl);">
             <div class="glass-card">
-                <h4 style="margin-bottom: var(--spacing-md); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Stock Activity Analysis</h4>
-                <p style="color: var(--light-text); margin-bottom: var(--spacing-lg);">View detailed stock movements, including stock-ins, stock-outs, and adjustments.</p>
+                <h4 style="margin-bottom: var(--spacing-md); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">Products Requiring Immediate Attention</h4>
+                <p style="color: var(--light-text); margin-bottom: var(--spacing-lg);">Products that have fallen below their reorder level and need to be restocked.</p>
                 
-                <div style="display: grid; gap: var(--spacing-md); margin-bottom: var(--spacing-lg);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-sm) 0;">
-                        <span style="color: var(--light-muted);">Stock In Units:</span>
-                        <span style="font-weight: 600; color: #10b981;">{{ stock_in_units }}</span>
+                {% if low_stock_items %}
+                    <div style="overflow-x: auto;">
+                        <table class="modern-table" style="min-width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Category</th>
+                                    <th>Current Stock</th>
+                                    <th>Reorder Level</th>
+                                    <th>Units Sold</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in low_stock_items %}
+                                    <tr style="background: rgba(239, 68, 68, 0.08);">
+                                        <td>
+                                            <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
+                                                <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.75rem;">
+                                                    {{ product.name|first|upper }}
+                                                </div>
+                                                {{ product.name }}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="status-badge status-success">{{ product.get_product_type_display }}</span>
+                                        </td>
+                                        <td>
+                                            <span style="font-weight: 600; color: #ef4444;">{{ product.quantity }}</span>
+                                        </td>
+                                        <td>{{ product.reorder_level }}</td>
+                                        <td>{{ product.sales_units|default:0 }}</td>
+                                        <td>
+                                            <span class="status-badge status-danger">URGENT</span>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-sm) 0;">
-                        <span style="color: var(--light-muted);">Stock Out Units:</span>
-                        <span style="font-weight: 600; color: #f59e0b;">{{ stock_out_units }}</span>
+                {% else %}
+                    <div style="text-align: center; padding: var(--spacing-2xl); color: var(--light-muted);">
+                        <i data-lucide="check-circle" style="width: 48px; height: 48px; margin-bottom: var(--spacing-md); opacity: 0.5; color: #10b981;"></i>
+                        <div>All products are adequately stocked</div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-sm) 0;">
-                        <span style="color: var(--light-muted);">Movement Records:</span>
-                        <span style="font-weight: 600;">{{ total_movements }}</span>
-                    </div>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md);">
+                {% endif %}
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md); margin-top: var(--spacing-lg);">
                     <a href="{% url 'inventory:stock-report' %}" class="btn btn-secondary" style="justify-content: center;">
                         <i data-lucide="printer" style="width: 16px; height: 16px;"></i>
                         Print Report
@@ -169,6 +201,7 @@
             </div>
         </div>
     </div>
+
 </div>
 
 <!-- Analytics Section -->
@@ -251,6 +284,148 @@
                                 <td colspan="5" style="text-align: center; padding: var(--spacing-xl); color: var(--light-muted);">
                                     <i data-lucide="inbox" style="width: 48px; height: 48px; margin-bottom: var(--spacing-md); opacity: 0.5;"></i>
                                     <div>No sales data available</div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Top Products That Need Buying (Trends) -->
+        <div style="margin-top: var(--spacing-2xl);">
+            <h4 style="margin-bottom: var(--spacing-lg); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                <i data-lucide="trending-up" style="width: 16px; height: 16px; display: inline; margin-right: var(--spacing-sm);"></i>
+                Top Products to Restock (High Demand Trends)
+            </h4>
+            <div class="modern-table-container">
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th>Current Stock</th>
+                            <th>Units Sold (Demand)</th>
+                            <th>Buy Qty</th>
+                            <th>Purchase Price</th>
+                            <th>Recommended Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in top_need_buying %}
+                            <tr style="{% if product.restock_priority == 0 %}background: rgba(239, 68, 68, 0.08); border-left: 3px solid #ef4444;{% elif product.restock_priority == 1 %}background: rgba(245, 158, 11, 0.06); border-left: 3px solid #f59e0b;{% endif %}">
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
+                                        <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.75rem;">
+                                            {{ product.name|first|upper }}
+                                        </div>
+                                        {{ product.name }}
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-success">{{ product.get_product_type_display }}</span>
+                                </td>
+                                <td>
+                                    {% if product.restock_priority == 0 %}
+                                        <span class="status-badge status-danger" style="font-weight: 700;">{{ product.quantity }} CRITICAL</span>
+                                    {% elif product.restock_priority == 1 %}
+                                        <span class="status-badge status-warning">{{ product.quantity }}</span>
+                                    {% else %}
+                                        <span class="status-badge status-success">{{ product.quantity }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span style="font-weight: 600; color: #667eea;">{{ product.sales_units|default:0 }}</span>
+                                </td>
+                                <td>
+                                    <span style="font-weight: 700;">{{ product.recommended_buy_qty }}</span>
+                                </td>
+                                <td>
+                                    <span style="font-weight: 500;">&#8369;{{ product.purchase_price }}</span>
+                                </td>
+                                <td>
+                                    {% if product.restock_priority == 0 %}
+                                        <span class="status-badge status-danger">BUY URGENTLY</span>
+                                    {% elif product.restock_priority == 1 %}
+                                        <span class="status-badge status-warning">BUY SOON</span>
+                                    {% else %}
+                                        <span class="status-badge status-success">MONITOR</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: var(--light-muted);">
+                                    <i data-lucide="inbox" style="width: 48px; height: 48px; margin-bottom: var(--spacing-md); opacity: 0.5;"></i>
+                                    <div>No products with sales history</div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Least Sold Products -->
+        <div style="margin-top: var(--spacing-2xl);">
+            <h4 style="margin-bottom: var(--spacing-lg); color: var(--light-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                <i data-lucide="trending-down" style="width: 16px; height: 16px; display: inline; margin-right: var(--spacing-sm);"></i>
+                Least Sold/Bought Products (Low Performers)
+            </h4>
+            <div class="modern-table-container">
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th>Current Stock</th>
+                            <th>Units Sold</th>
+                            <th>Units Bought</th>
+                            <th>Selling Price</th>
+                            <th>Recommendation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in least_sold_products %}
+                            <tr style="background: rgba(148, 163, 184, 0.06); opacity: 0.85;">
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
+                                        <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.75rem;">
+                                            {{ product.name|first|upper }}
+                                        </div>
+                                        {{ product.name }}
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-success">{{ product.get_product_type_display }}</span>
+                                </td>
+                                <td>
+                                    <span style="font-weight: 600;">{{ product.quantity }}</span>
+                                </td>
+                                <td>
+                                    <span style="font-weight: 600; color: #94a3b8;">{{ product.sales_units }}</span>
+                                </td>
+                                <td>
+                                    <span style="font-weight: 600; color: #94a3b8;">{{ product.bought_units }}</span>
+                                </td>
+                                <td>
+                                    <span style="font-weight: 500;">&#8369;{{ product.unit_price }}</span>
+                                </td>
+                                <td>
+                                    {% if product.sales_units == 0 and product.bought_units == 0 %}
+                                        <span class="status-badge status-warning">REVIEW ITEM</span>
+                                    {% elif product.sales_units < 5 %}
+                                        <span class="status-badge status-warning">LOW DEMAND</span>
+                                    {% else %}
+                                        <span class="status-badge status-success">MONITOR</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: var(--light-muted);">
+                                    <i data-lucide="inbox" style="width: 48px; height: 48px; margin-bottom: var(--spacing-md); opacity: 0.5;"></i>
+                                    <div>No products in inventory</div>
                                 </td>
                             </tr>
                         {% endfor %}

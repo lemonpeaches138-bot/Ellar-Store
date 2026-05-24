@@ -41,7 +41,7 @@
                                 {% if staff.is_superuser %}
                                     <span class="status-badge status-primary">Superuser</span>
                                 {% else %}
-                                    <span class="status-badge status-success">Staff</span>
+                                    <span class="status-badge status-success">{{ staff.profile.get_staff_role_display }}</span>
                                 {% endif %}
                                 {% if staff.is_active %}
                                     <span class="status-badge status-success">Active</span>
@@ -65,6 +65,22 @@
                                 <span class="detail-value">{{ staff.last_name|default:"Not set" }}</span>
                             </div>
                             <div class="detail-row">
+                                <span class="detail-label">Address:</span>
+                                <span class="detail-value">{{ staff.profile.address|default:"Not set" }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Birthday:</span>
+                                <span class="detail-value">{{ staff.profile.birthday|date:"M d, Y"|default:"Not set" }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Age:</span>
+                                <span class="detail-value">{{ staff.profile.age|default:"Not set" }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Role:</span>
+                                <span class="detail-value">{% if staff.is_superuser %}Admin{% else %}{{ staff.profile.get_staff_role_display }}{% endif %}</span>
+                            </div>
+                            <div class="detail-row">
                                 <span class="detail-label">Joined:</span>
                                 <span class="detail-value">{{ staff.date_joined|date:"M d, Y H:i" }}</span>
                             </div>
@@ -84,11 +100,17 @@
                                 <button
                                     type="button"
                                     class="btn btn-secondary staff-manage-btn"
-                                    data-action-url="{% url 'inventory:staff-set-password' staff.id %}"
+                                    data-action-url="{% url 'inventory:staff-edit' staff.id %}"
                                     data-full-name="{{ staff.get_full_name|default:staff.username }}"
                                     data-username="{{ staff.username }}"
+                                    data-first-name="{{ staff.first_name }}"
+                                    data-last-name="{{ staff.last_name }}"
                                     data-email="{{ staff.email|default:'Not set' }}"
-                                    data-role="{% if staff.is_superuser %}Superuser{% else %}Staff{% endif %}"
+                                    data-address="{{ staff.profile.address }}"
+                                    data-birthday="{{ staff.profile.birthday|date:'Y-m-d' }}"
+                                    data-birthday-display="{{ staff.profile.birthday|date:'M d, Y'|default:'Not set' }}"
+                                    data-age="{{ staff.profile.age|default:'Not set' }}"
+                                    data-role="{% if staff.is_superuser %}Superuser{% else %}{{ staff.profile.get_staff_role_display }}{% endif %}"
                                     data-status="{% if staff.is_active %}Active{% else %}Inactive{% endif %}"
                                     data-joined='{{ staff.date_joined|date:"M d, Y H:i" }}'
                                     data-last-login='{{ staff.last_login|date:"M d, Y H:i"|default:"Never" }}'
@@ -164,32 +186,64 @@
                     <span class="detail-value" id="modal-staff-last-login">Never</span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">Password:</span>
-                    <span class="detail-value">Protected hash</span>
+                    <span class="detail-label">Age:</span>
+                    <span class="detail-value" id="modal-staff-age">Not set</span>
                 </div>
             </div>
 
-            <form id="staff-password-form" method="post" class="staff-password-form">
+            <form id="staff-edit-form" method="post" class="staff-edit-form">
                 {% csrf_token %}
-                <label for="new_password">New Password</label>
-                <div class="password-input-row">
-                    <input type="password" id="new_password" name="new_password" autocomplete="new-password" required>
-                    <button type="button" class="password-toggle" data-target="new_password" aria-label="Show new password">
-                        <i data-lucide="eye" style="width: 18px; height: 18px;"></i>
-                    </button>
+                <div class="staff-edit-grid">
+                    <div class="staff-form-field">
+                        <label for="staff_username">Username</label>
+                        <input type="text" id="staff_username" name="username" maxlength="150" autocomplete="username" required>
+                    </div>
+                    <div class="staff-form-field">
+                        <label for="staff_birthday">Birthday</label>
+                        <input type="date" id="staff_birthday" name="birthday">
+                    </div>
+                    <div class="staff-form-field">
+                        <label for="staff_first_name">First Name</label>
+                        <input type="text" id="staff_first_name" name="first_name" maxlength="150" autocomplete="given-name">
+                    </div>
+                    <div class="staff-form-field">
+                        <label for="staff_last_name">Last Name</label>
+                        <input type="text" id="staff_last_name" name="last_name" maxlength="150" autocomplete="family-name">
+                    </div>
                 </div>
 
-                <label for="confirm_password">Confirm Password</label>
-                <div class="password-input-row">
-                    <input type="password" id="confirm_password" name="confirm_password" autocomplete="new-password" required>
-                    <button type="button" class="password-toggle" data-target="confirm_password" aria-label="Show confirm password">
-                        <i data-lucide="eye" style="width: 18px; height: 18px;"></i>
-                    </button>
+                <div class="staff-form-field">
+                    <label for="staff_address">Address</label>
+                    <input type="text" id="staff_address" name="address" maxlength="255" autocomplete="street-address">
                 </div>
 
-                <button type="submit" class="btn btn-primary staff-password-submit">
-                    <i data-lucide="key-round" style="width: 16px; height: 16px; margin-right: var(--spacing-xs);"></i>
-                    Reset Password
+                <div class="staff-password-section">
+                    <div class="staff-password-note">Leave password fields blank to keep the current password.</div>
+                    <div class="staff-edit-grid">
+                        <div class="staff-form-field">
+                            <label for="new_password">New Password</label>
+                            <div class="password-input-row">
+                                <input type="password" id="new_password" name="new_password" autocomplete="new-password">
+                                <button type="button" class="password-toggle" data-target="new_password" aria-label="Show new password">
+                                    <i data-lucide="eye" style="width: 18px; height: 18px;"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="staff-form-field">
+                            <label for="confirm_password">Confirm Password</label>
+                            <div class="password-input-row">
+                                <input type="password" id="confirm_password" name="confirm_password" autocomplete="new-password">
+                                <button type="button" class="password-toggle" data-target="confirm_password" aria-label="Show confirm password">
+                                    <i data-lucide="eye" style="width: 18px; height: 18px;"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary staff-edit-submit">
+                    <i data-lucide="save" style="width: 16px; height: 16px; margin-right: var(--spacing-xs);"></i>
+                    Save Changes
                 </button>
             </form>
         </div>
@@ -322,12 +376,13 @@
 }
 
 .staff-modal {
-    width: min(560px, 100%);
+    width: min(720px, 100%);
+    max-height: calc(100vh - 2rem);
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-xl);
-    overflow: hidden;
+    overflow: auto;
 }
 
 .staff-modal-header {
@@ -376,25 +431,31 @@
     margin-bottom: var(--spacing-xl);
 }
 
-.staff-password-form {
+.staff-edit-form {
     display: grid;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-md);
 }
 
-.staff-password-form label {
+.staff-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-md);
+}
+
+.staff-form-field {
+    display: grid;
+    gap: var(--spacing-xs);
+}
+
+.staff-edit-form label {
     font-weight: 600;
     color: var(--light-text);
     font-size: 0.875rem;
 }
 
-.password-input-row {
-    display: flex;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
-}
-
+.staff-form-field input,
 .password-input-row input {
-    flex: 1;
+    width: 100%;
     min-width: 0;
     padding: var(--spacing-sm) var(--spacing-md);
     border: 1px solid var(--light-border);
@@ -403,13 +464,34 @@
     color: var(--light-text);
 }
 
+.staff-password-section {
+    display: grid;
+    gap: var(--spacing-sm);
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--light-border);
+}
+
+.staff-password-note {
+    color: var(--light-muted);
+    font-size: 0.8125rem;
+}
+
+.password-input-row {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.password-input-row input {
+    flex: 1;
+}
+
 .password-toggle {
     width: 42px;
     height: 42px;
     flex: 0 0 42px;
 }
 
-.staff-password-submit {
+.staff-edit-submit {
     justify-content: center;
     margin-top: var(--spacing-sm);
 }
@@ -438,6 +520,10 @@
     .staff-actions button {
         width: 100%;
     }
+
+    .staff-edit-grid {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
 
@@ -447,14 +533,20 @@ document.addEventListener('DOMContentLoaded', function() {
     lucide.createIcons();
 
     const modal = document.getElementById('staff-manage-modal');
-    const form = document.getElementById('staff-password-form');
+    const form = document.getElementById('staff-edit-form');
     const title = document.getElementById('staff-modal-title');
     const subtitle = document.getElementById('staff-modal-subtitle');
     const email = document.getElementById('modal-staff-email');
+    const age = document.getElementById('modal-staff-age');
     const role = document.getElementById('modal-staff-role');
     const status = document.getElementById('modal-staff-status');
     const joined = document.getElementById('modal-staff-joined');
     const lastLogin = document.getElementById('modal-staff-last-login');
+    const usernameInput = document.getElementById('staff_username');
+    const firstNameInput = document.getElementById('staff_first_name');
+    const lastNameInput = document.getElementById('staff_last_name');
+    const addressInput = document.getElementById('staff_address');
+    const birthdayInput = document.getElementById('staff_birthday');
 
     function closeModal() {
         modal.classList.remove('show');
@@ -467,14 +559,20 @@ document.addEventListener('DOMContentLoaded', function() {
             title.textContent = button.dataset.fullName;
             subtitle.textContent = '@' + button.dataset.username;
             email.textContent = button.dataset.email;
+            age.textContent = button.dataset.age;
             role.textContent = button.dataset.role;
             status.textContent = button.dataset.status;
             joined.textContent = button.dataset.joined;
             lastLogin.textContent = button.dataset.lastLogin;
+            usernameInput.value = button.dataset.username;
+            firstNameInput.value = button.dataset.firstName;
+            lastNameInput.value = button.dataset.lastName;
+            addressInput.value = button.dataset.address;
+            birthdayInput.value = button.dataset.birthday;
             form.action = button.dataset.actionUrl;
             modal.classList.add('show');
             modal.setAttribute('aria-hidden', 'false');
-            document.getElementById('new_password').focus();
+            usernameInput.focus();
         });
     });
 

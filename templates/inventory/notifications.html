@@ -15,6 +15,17 @@
                 <span class="status-badge status-info">
                     {{ unread_count }} Unread
                 </span>
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    id="markAllNotificationsPageBtn"
+                    data-mark-all-url="{% url 'inventory:mark-all-notifications-read' %}"
+                    style="padding: var(--spacing-sm) var(--spacing-lg); font-size: 0.875rem;"
+                    {% if unread_count == 0 %}disabled{% endif %}
+                >
+                    <i data-lucide="check-check" style="width: 16px; height: 16px; margin-right: var(--spacing-xs);"></i>
+                    Mark all as read
+                </button>
             </div>
         </div>
 
@@ -315,6 +326,48 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => console.error('Error marking notification as read:', error));
         });
     });
+
+    const markAllButton = document.getElementById('markAllNotificationsPageBtn');
+    if (markAllButton) {
+        markAllButton.addEventListener('click', function() {
+            fetch(this.dataset.markAllUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'X-CSRFToken': window.getCsrfToken ? window.getCsrfToken() : getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Unable to mark all notifications as read (${response.status})`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    document.querySelectorAll('.notification-item.unread').forEach(item => {
+                        item.classList.remove('unread');
+                    });
+                    document.querySelectorAll('.unread-dot, .mark-read-btn').forEach(element => {
+                        element.remove();
+                    });
+
+                    const unreadCount = document.querySelector('.status-badge.status-info');
+                    if (unreadCount) {
+                        unreadCount.textContent = '0 Unread';
+                    }
+                    this.disabled = true;
+
+                    if (window.refreshNotificationBadge) {
+                        window.refreshNotificationBadge();
+                    }
+                }
+            })
+            .catch(error => console.error('Error marking all notifications as read:', error));
+        });
+    }
 });
 
 // Helper function to get CSRF token

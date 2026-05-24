@@ -138,7 +138,5 @@ LOGIN_REDIRECT_URL = "inventory:dashboard"
 SESSION_COOKIE_AGE = 1800  # 30 minutes in seconds
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-<<<<<<< HEAD
-=======
+
 CORS_ALLOW_ALL_ORIGINS = True
->>>>>>> 9a31ee7 (initial commit)

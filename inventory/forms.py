@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.auth import password_validation
 from django.contrib.auth.models import User
 from .models import Product, StockMovement, UserRegistration, UserProfile
 
@@ -25,6 +26,28 @@ class ProductForm(forms.ModelForm):
         widgets = {
             "expiration_date": forms.DateInput(attrs={"type": "date"}),
         }
+    
+    def clean_name(self):
+        """Validate product name for duplicates (case-insensitive)."""
+        name = self.cleaned_data.get('name', '').strip()
+        if not name:
+            raise forms.ValidationError("Product name cannot be empty.")
+        
+        # Check for existing product with same name (case-insensitive)
+        existing_query = Product.objects.filter(name__iexact=name)
+        
+        # If editing, exclude the current product from the check
+        if self.instance and self.instance.pk:
+            existing_query = existing_query.exclude(pk=self.instance.pk)
+        
+        if existing_query.exists():
+            existing_product = existing_query.first()
+            raise forms.ValidationError(
+                f'A product with the name "{existing_product.name}" already exists. '
+                f'Product names must be unique (case-insensitive).'
+            )
+        
+        return name
 
 
 class StockMovementForm(forms.ModelForm):
@@ -48,7 +71,11 @@ class UserRegistrationForm(forms.ModelForm):
     
     class Meta:
         model = UserRegistration
-        fields = ['username', 'email', 'first_name', 'last_name', 'phone', 'location', 'password']
+        fields = ['username', 'email', 'first_name', 'last_name', 'staff_role', 'phone', 'location', 'password']
+        labels = {
+            'staff_role': 'Staff Role',
+            'location': 'Address',
+        }
     
     def clean_username(self):
         username = self.cleaned_data.get('username')
@@ -100,6 +127,78 @@ class UserProfileForm(forms.ModelForm):
             'first_name': 'Read-only',
             'last_name': 'Read-only',
         }
+
+
+class StaffEditForm(forms.Form):
+    """Form for system admins editing staff account details."""
+    username = forms.CharField(max_length=150, label='Username')
+    first_name = forms.CharField(max_length=150, required=False, label='First Name')
+    last_name = forms.CharField(max_length=150, required=False, label='Last Name')
+    address = forms.CharField(max_length=255, required=False, label='Address')
+    birthday = forms.DateField(
+        required=False,
+        label='Birthday',
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    new_password = forms.CharField(
+        required=False,
+        label='New Password',
+        widget=forms.PasswordInput,
+    )
+    confirm_password = forms.CharField(
+        required=False,
+        label='Confirm Password',
+        widget=forms.PasswordInput,
+    )
+
+    def __init__(self, *args, staff_user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.staff_user = staff_user
+
+    def clean_username(self):
+        username = (self.cleaned_data.get('username') or '').strip()
+        if not username:
+            raise forms.ValidationError("Username is required.")
+
+        existing_users = User.objects.filter(username__iexact=username)
+        if self.staff_user:
+            existing_users = existing_users.exclude(pk=self.staff_user.pk)
+        if existing_users.exists():
+            raise forms.ValidationError("This username is already taken.")
+
+        return username
+
+    def clean(self):
+        cleaned_data = super().clean()
+        new_password = cleaned_data.get('new_password')
+        confirm_password = cleaned_data.get('confirm_password')
+
+        if new_password or confirm_password:
+            if new_password != confirm_password:
+                raise forms.ValidationError("Passwords do not match.")
+            password_validation.validate_password(new_password, self.staff_user)
+
+        return cleaned_data
+
+    def save(self):
+        staff_user = self.staff_user
+        staff_user.username = self.cleaned_data['username']
+        staff_user.first_name = self.cleaned_data.get('first_name', '').strip()
+        staff_user.last_name = self.cleaned_data.get('last_name', '').strip()
+
+        update_fields = ['username', 'first_name', 'last_name']
+        new_password = self.cleaned_data.get('new_password')
+        if new_password:
+            staff_user.set_password(new_password)
+            update_fields.append('password')
+        staff_user.save(update_fields=update_fields)
+
+        profile = staff_user.profile
+        profile.address = self.cleaned_data.get('address', '').strip()
+        profile.birthday = self.cleaned_data.get('birthday')
+        profile.save(update_fields=['address', 'birthday', 'updated_at'])
+
+        return staff_user
 
 
 class ThemePreferenceForm(forms.ModelForm):

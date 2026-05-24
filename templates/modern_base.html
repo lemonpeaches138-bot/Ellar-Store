@@ -120,6 +120,29 @@
     color: var(--light-text);
 }
 
+.notification-dropdown-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.mark-all-notifications-btn {
+    border: 0;
+    border-radius: var(--radius-lg);
+    background: var(--primary-color-soft);
+    color: var(--primary-color);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.42rem 0.65rem;
+    transition: all var(--transition-fast);
+}
+
+.mark-all-notifications-btn:hover {
+    background: var(--primary-color);
+    color: white;
+}
+
 .view-all-link {
     color: var(--primary-color);
     text-decoration: none;
@@ -172,6 +195,7 @@
 
         <nav class="sidebar-nav">
             {% if user.is_authenticated %}
+                {% if user.is_superuser or user.username == 'EllarMiniMart' %}
                 <a href="{% url 'inventory:dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
                     <i data-lucide="layout-dashboard" style="width: 18px; height: 18px; margin-right: 12px;"></i>
                     Dashboard
@@ -179,6 +203,10 @@
                 <a href="{% url 'inventory:pos' %}" class="nav-item {% if request.resolver_match.url_name == 'pos' %}active{% endif %}">
                     <i data-lucide="shopping-cart" style="width: 18px; height: 18px; margin-right: 12px;"></i>
                     Point of Sale
+                </a>
+                <a href="{% url 'inventory:sales-history' %}" class="nav-item {% if request.resolver_match.url_name == 'sales-history' %}active{% endif %}">
+                    <i data-lucide="receipt" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                    Sales History
                 </a>
                 <a href="{% url 'inventory:product-list' %}" class="nav-item {% if request.resolver_match.url_name == 'product-list' %}active{% endif %}">
                     <i data-lucide="package-2" style="width: 18px; height: 18px; margin-right: 12px;"></i>
@@ -192,6 +220,25 @@
                     <i data-lucide="sliders" style="width: 18px; height: 18px; margin-right: 12px;"></i>
                     Settings
                 </a>
+                {% elif user.profile.staff_role == 'cashier' %}
+                <a href="{% url 'inventory:pos' %}" class="nav-item {% if request.resolver_match.url_name == 'pos' %}active{% endif %}">
+                    <i data-lucide="shopping-cart" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                    Point of Sale
+                </a>
+                <a href="{% url 'inventory:sales-history' %}" class="nav-item {% if request.resolver_match.url_name == 'sales-history' %}active{% endif %}">
+                    <i data-lucide="receipt" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                    Sales History
+                </a>
+                {% elif user.profile.staff_role == 'inventory' %}
+                <a href="{% url 'inventory:product-list' %}" class="nav-item {% if request.resolver_match.url_name == 'product-list' %}active{% endif %}">
+                    <i data-lucide="package-2" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                    Inventory
+                </a>
+                <a href="{% url 'inventory:stock-report' %}" class="nav-item {% if request.resolver_match.url_name == 'stock-report' %}active{% endif %}">
+                    <i data-lucide="alert-triangle" style="width: 18px; height: 18px; margin-right: 12px;"></i>
+                    Low Stock Report
+                </a>
+                {% endif %}
 
                 <!-- Admin Only Links -->
                 {% if user.is_superuser or user.username == 'EllarMiniMart' %}
@@ -244,7 +291,12 @@
                     <div class="notification-dropdown" id="notificationDropdown">
                         <div class="notification-dropdown-header">
                             <h4>Notifications</h4>
-                            <a href="{% url 'inventory:notifications' %}" class="view-all-link">View All</a>
+                            <div class="notification-dropdown-actions">
+                                <button type="button" class="mark-all-notifications-btn" id="markAllNotificationsBtn">
+                                    Mark all as read
+                                </button>
+                                <a href="{% url 'inventory:notifications' %}" class="view-all-link">View All</a>
+                            </div>
                         </div>
                         <div class="notification-dropdown-content" id="notificationDropdownContent">
                             <div class="loading-notifications">
@@ -1088,8 +1140,10 @@
         const notificationDropdown = document.getElementById('notificationDropdown');
         const notificationBadge = document.getElementById('notificationBadge');
         const notificationDropdownContent = document.getElementById('notificationDropdownContent');
+        const markAllNotificationsBtn = document.getElementById('markAllNotificationsBtn');
         const notificationListUrl = "{% url 'inventory:api-notifications' %}";
         const markNotificationReadUrlTemplate = "{% url 'inventory:mark-notification-read' 0 %}";
+        const markAllNotificationsReadUrl = "{% url 'inventory:mark-all-notifications-read' %}";
 
         function getMarkNotificationReadUrl(notificationId) {
             return markNotificationReadUrlTemplate.replace('/0/', `/${encodeURIComponent(notificationId)}/`);
@@ -1265,6 +1319,39 @@
             .catch(error => console.error('Error marking notification as read:', error));
         };
 
+        function markAllNotificationsRead() {
+            fetch(markAllNotificationsReadUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'X-CSRFToken': getCsrfToken(),
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Unable to mark all notifications as read (${response.status})`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    updateNotificationBadge(data.unread_count || 0);
+                    loadNotifications();
+                }
+            })
+            .catch(error => console.error('Error marking all notifications as read:', error));
+        }
+
+        if (markAllNotificationsBtn) {
+            markAllNotificationsBtn.addEventListener('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                markAllNotificationsRead();
+            });
+        }
+
         // Helper function to get CSRF token
         function getCookie(name) {
             let cookieValue = null;
@@ -1291,6 +1378,600 @@
         }, 30000);
         // End Django template logic for system admin notifications
         {% endif %}
+    </script>
+
+    <!-- Floating Chat Button -->
+    <button class="floating-chat-btn" id="floatingChatBtn" title="Open Chat" style="position: fixed; bottom: 2rem; right: 2rem; width: 56px; height: 56px; border-radius: 50%; background: #ec4899; color: white; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; z-index: 9999; visibility: visible; opacity: 1; pointer-events: auto;">
+        <span>💬</span>
+        <span class="chat-badge" id="chatUnreadBadge" style="display: none;"></span>
+    </button>
+
+    <!-- Chat Modal Overlay -->
+    <div class="chat-modal-overlay" id="chatModalOverlay" style="position: fixed; bottom: 0; right: 0; width: 100%; height: 100%; background: rgba(0,0,0,0); opacity: 0; transition: all 0.3s ease; pointer-events: none; z-index: 9997;"></div>
+
+    <!-- Chat Modal -->
+    <div class="chat-modal" id="chatModal" style="position: fixed; bottom: 4.5rem; right: 2rem; width: 380px; height: 600px; background: white; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); display: flex; flex-direction: column; opacity: 0; transform: translateY(20px) scale(0.95); transition: all 0.3s ease; pointer-events: none; z-index: 9998; visibility: visible;">
+        <div class="chat-header">
+            <h3>Messages</h3>
+            <button class="chat-close-btn" id="chatCloseBtn">×</button>
+        </div>
+
+        <!-- Tabs for Chat List and Staff -->
+        <div class="chat-tabs">
+            <button class="chat-tab active" data-tab="chat-list">Chats</button>
+            <button class="chat-tab" data-tab="staff-list">Employees</button>
+        </div>
+
+        <!-- Chat List Tab -->
+        <div class="chat-list" id="chatListView">
+            <!-- Group Chat Item -->
+            <div class="chat-item group-chat-item" data-chat-type="group">
+                <div class="chat-item-header">
+                    <span class="chat-item-name">👥 All Employees</span>
+                    <span class="chat-item-actions"></span>
+                </div>
+                <div class="chat-item-preview">Group chat with all staff</div>
+            </div>
+
+            <!-- Individual Chats Will Be Loaded Here -->
+            <div id="individualChatsContainer"></div>
+        </div>
+
+        <!-- Staff Members Tab (for initiating individual chats) -->
+        <div class="staff-list" id="staffListView" style="display: none;">
+            <div class="staff-list-container" id="staffMembersContainer">
+                <div style="text-align: center; color: #999; padding: 1rem;">Loading staff members...</div>
+            </div>
+        </div>
+
+        <!-- Chat View Tab -->
+        <div class="chat-view" id="chatView" style="display: none;">
+            <div id="messagesContainer" class="messages-container">
+                <div class="empty-state">
+                    <div class="empty-state-icon">💬</div>
+                    <div class="empty-state-text">Select a chat to view messages</div>
+                </div>
+            </div>
+            <div class="message-input-area">
+                <input
+                    type="text"
+                    class="message-input"
+                    id="messageInput"
+                    placeholder="Type a message..."
+                    disabled
+                >
+                <button class="send-message-btn" id="sendMessageBtn" disabled>
+                    Send
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Chat Functionality - Debug Information
+        console.log('Chat Script Starting...');
+        
+        const floatingChatBtn = document.getElementById('floatingChatBtn');
+        const chatModal = document.getElementById('chatModal');
+        const chatModalOverlay = document.getElementById('chatModalOverlay');
+        const chatCloseBtn = document.getElementById('chatCloseBtn');
+        const chatTabs = document.querySelectorAll('.chat-tab');
+        const chatListView = document.getElementById('chatListView');
+        const chatViewTab = document.getElementById('chatView');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendMessageBtn = document.getElementById('sendMessageBtn');
+        const groupChatItem = document.querySelector('.group-chat-item');
+        const chatUnreadBadge = document.getElementById('chatUnreadBadge');
+        const allEmployeesChatName = 'All Employees';
+
+        let currentChatId = null;
+        let currentChatType = null;
+
+        // Log to verify elements exist
+        console.log('Chat Elements Found:', {
+            button: !!floatingChatBtn,
+            modal: !!chatModal,
+            overlay: !!chatModalOverlay,
+            closeBtn: !!chatCloseBtn,
+            tabs: chatTabs.length,
+            listView: !!chatListView,
+            viewTab: !!chatViewTab,
+            messagesContainer: !!messagesContainer,
+            messageInput: !!messageInput,
+            sendBtn: !!sendMessageBtn,
+            groupItem: !!groupChatItem,
+            unreadBadge: !!chatUnreadBadge
+        });
+
+        if (!floatingChatBtn || !chatModal) {
+            console.error('Critical chat elements not found. Chat functionality disabled.');
+        } else {
+            console.log('Chat setup complete - all elements found');
+
+            // Toggle chat modal
+            if (floatingChatBtn) {
+                floatingChatBtn.addEventListener('click', () => {
+                    console.log('Chat button clicked');
+                    const isOpen = chatModal.classList.contains('show');
+                    console.log('Modal currently open:', isOpen);
+                    if (isOpen) {
+                        closeChatModal();
+                    } else {
+                        openChatModal();
+                    }
+                });
+            } else {
+                console.error('Chat button not found - cannot attach click listener');
+            }
+
+            // Close chat modal
+            if (chatCloseBtn) {
+                chatCloseBtn.addEventListener('click', closeChatModal);
+            }
+            if (chatModalOverlay) {
+                chatModalOverlay.addEventListener('click', closeChatModal);
+            }
+
+            if (groupChatItem) {
+                groupChatItem.addEventListener('click', async () => {
+                    let chatId = groupChatItem.dataset.chatId;
+                    if (!chatId) {
+                        chatId = await initializeChat();
+                    }
+                    if (chatId) {
+                        selectChat(chatId, 'GROUP', allEmployeesChatName);
+                    }
+                });
+            }
+        }
+
+        function openChatModal() {
+            if (!chatModal || !chatModalOverlay || !floatingChatBtn) {
+                console.error('Cannot open chat modal - missing elements');
+                return;
+            }
+            console.log('Opening chat modal');
+            chatModal.classList.add('show');
+            chatModal.style.pointerEvents = 'auto';
+            chatModalOverlay.classList.add('show');
+            chatModalOverlay.style.pointerEvents = 'auto';
+            floatingChatBtn.classList.add('active');
+            loadChats();
+        }
+
+        function closeChatModal() {
+            if (!chatModal || !chatModalOverlay || !floatingChatBtn) {
+                console.error('Cannot close chat modal - missing elements');
+                return;
+            }
+            console.log('Closing chat modal');
+            chatModal.classList.remove('show');
+            chatModal.style.pointerEvents = 'none';
+            chatModalOverlay.classList.remove('show');
+            chatModalOverlay.style.pointerEvents = 'none';
+            floatingChatBtn.classList.remove('active');
+        }
+
+        // Tab switching
+        if (chatTabs && chatTabs.length > 0) {
+            chatTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    chatTabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+
+                    const tabName = tab.dataset.tab;
+                    const chatListView = document.getElementById('chatListView');
+                    const staffListView = document.getElementById('staffListView');
+                    const chatViewTab = document.getElementById('chatView');
+                    
+                    if (tabName === 'chat-list') {
+                        if (chatListView) chatListView.style.display = 'block';
+                        if (staffListView) staffListView.style.display = 'none';
+                        if (chatViewTab) chatViewTab.style.display = 'none';
+                        loadChats();
+                    } else if (tabName === 'staff-list') {
+                        if (chatListView) chatListView.style.display = 'none';
+                        if (staffListView) staffListView.style.display = 'block';
+                        if (chatViewTab) chatViewTab.style.display = 'none';
+                        loadStaffMembers();
+                    } else if (tabName === 'chat-view') {
+                        if (chatListView) chatListView.style.display = 'none';
+                        if (staffListView) staffListView.style.display = 'none';
+                        if (chatViewTab) chatViewTab.style.display = 'flex';
+                        if (currentChatId && messagesContainer) {
+                            loadMessages(currentChatId);
+                        }
+                    }
+                });
+            });
+        }
+
+        // Load all chats for the user
+        async function loadChats() {
+            try {
+                const response = await fetch('/api/chats/', {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    updateChatUnreadBadge(data.unread_total);
+                    const container = document.getElementById('individualChatsContainer');
+                    container.innerHTML = '';
+
+                    data.chats.forEach(chat => {
+                        if (chat.chat_type === 'GROUP') {
+                            // Update group chat item
+                            updateGroupChatItem(chat);
+                        } else {
+                            // Create individual chat item
+                            const chatItem = document.createElement('div');
+                            chatItem.className = 'chat-item';
+                            chatItem.dataset.chatId = chat.id;
+                            chatItem.innerHTML = `
+                                <div class="chat-item-header">
+                                    <span class="chat-item-name">${chat.name}</span>
+                                    <span class="chat-item-actions">
+                                        <span class="chat-item-time">${formatTime(chat.last_message_time)}</span>
+                                        ${renderUnreadIndicator(chat.unread_count)}
+                                        <button type="button" class="chat-delete-btn" title="Delete chat" aria-label="Delete chat" data-chat-id="${chat.id}">&times;</button>
+                                    </span>
+                                </div>
+                                <div class="chat-item-preview">${chat.last_message || 'No messages yet'}</div>
+                            `;
+                            if (String(chat.id) === String(currentChatId)) {
+                                chatItem.classList.add('active');
+                            }
+                            chatItem.addEventListener('click', () => selectChat(chat.id, 'DIRECT', chat.name));
+                            const deleteBtn = chatItem.querySelector('.chat-delete-btn');
+                            if (deleteBtn) {
+                                deleteBtn.addEventListener('click', (event) => {
+                                    event.stopPropagation();
+                                    deleteChat(chat.id);
+                                });
+                            }
+                            container.appendChild(chatItem);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading chats:', error);
+            }
+        }
+
+        function formatUnreadCount(count) {
+            const unreadCount = Number(count) || 0;
+            return unreadCount > 99 ? '99+' : String(unreadCount);
+        }
+
+        function renderUnreadIndicator(count) {
+            const unreadCount = Number(count) || 0;
+            if (unreadCount <= 0) return '';
+            return `<span class="chat-unread-indicator">${formatUnreadCount(unreadCount)}</span>`;
+        }
+
+        function updateChatUnreadBadge(count) {
+            if (!chatUnreadBadge) return;
+            const unreadCount = Number(count) || 0;
+            if (unreadCount > 0) {
+                chatUnreadBadge.textContent = formatUnreadCount(unreadCount);
+                chatUnreadBadge.style.display = 'flex';
+            } else {
+                chatUnreadBadge.textContent = '';
+                chatUnreadBadge.style.display = 'none';
+            }
+        }
+
+        function updateGroupChatItem(chat) {
+            if (!groupChatItem) return;
+            groupChatItem.dataset.chatId = chat.id;
+            const name = groupChatItem.querySelector('.chat-item-name');
+            const preview = groupChatItem.querySelector('.chat-item-preview');
+            let actions = groupChatItem.querySelector('.chat-item-actions');
+            if (!actions) {
+                actions = document.createElement('span');
+                actions.className = 'chat-item-actions';
+                groupChatItem.querySelector('.chat-item-header').appendChild(actions);
+            }
+            if (name && chat.name) {
+                name.textContent = `👥 ${chat.name}`;
+            }
+            actions.innerHTML = `
+                <span class="chat-item-time">${formatTime(chat.last_message_time)}</span>
+                ${renderUnreadIndicator(chat.unread_count)}
+            `;
+            if (preview && chat.last_message) {
+                preview.textContent = `${chat.last_message_sender}: ${chat.last_message}`;
+            }
+            groupChatItem.classList.toggle('active', String(chat.id) === String(currentChatId));
+        }
+
+        async function loadStaffMembers() {
+            try {
+                const response = await fetch('/api/chats/staff/', {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                });
+                const data = await response.json();
+
+                const container = document.getElementById('staffMembersContainer');
+                container.innerHTML = '';
+
+                if (data.success && data.staff_members.length > 0) {
+                    data.staff_members.forEach(staff => {
+                        const staffItem = document.createElement('div');
+                        staffItem.className = 'staff-item';
+                        staffItem.style.cssText = `
+                            padding: 12px 15px;
+                            border-bottom: 1px solid #e2e8f0;
+                            cursor: pointer;
+                            transition: background 0.2s;
+                        `;
+                        staffItem.innerHTML = `
+                            <div style="font-weight: 500;">${staff.display_name}</div>
+                            <div style="font-size: 0.85rem; color: #666;">${staff.username}</div>
+                        `;
+                        staffItem.addEventListener('mouseover', () => {
+                            staffItem.style.background = '#f8fafc';
+                        });
+                        staffItem.addEventListener('mouseout', () => {
+                            staffItem.style.background = 'transparent';
+                        });
+                        staffItem.addEventListener('click', () => initiateDirectChat(staff.id, staff.display_name));
+                        container.appendChild(staffItem);
+                    });
+                } else {
+                    container.innerHTML = '<div style="text-align: center; color: #999; padding: 1rem;">No other staff members available</div>';
+                }
+            } catch (error) {
+                console.error('Error loading staff members:', error);
+                const container = document.getElementById('staffMembersContainer');
+                container.innerHTML = '<div style="text-align: center; color: #f00; padding: 1rem;">Error loading staff members</div>';
+            }
+        }
+
+        async function deleteChat(chatId) {
+            if (!chatId || !confirm('Delete this chat conversation?')) return;
+
+            try {
+                const response = await fetch(`/api/chats/${chatId}/delete/`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    if (String(currentChatId) === String(chatId)) {
+                        currentChatId = null;
+                        currentChatType = null;
+                        if (messageInput) {
+                            messageInput.value = '';
+                            messageInput.disabled = true;
+                        }
+                        if (sendMessageBtn) sendMessageBtn.disabled = true;
+                        if (messagesContainer) {
+                            messagesContainer.innerHTML = `
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">💬</div>
+                                    <div class="empty-state-text">Select a chat to view messages</div>
+                                </div>
+                            `;
+                        }
+                    }
+                    loadChats();
+                } else {
+                    alert(data.message || 'Unable to delete chat.');
+                }
+            } catch (error) {
+                console.error('Error deleting chat:', error);
+                alert('Unable to delete chat.');
+            }
+        }
+
+        async function initiateDirectChat(userId, staffName) {
+            try {
+                const response = await fetch(`/api/chats/direct/${userId}/`, {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('Direct chat opened with:', staffName);
+                    selectChat(data.chat_id, 'DIRECT', staffName);
+                    loadChats();
+                }
+            } catch (error) {
+                console.error('Error initiating direct chat:', error);
+            }
+        }
+
+        // Select a chat
+        function selectChat(chatId, chatType, chatName) {
+            currentChatId = chatId;
+            currentChatType = chatType;
+
+            // Update active state
+            document.querySelectorAll('.chat-item').forEach(item => {
+                item.classList.remove('active');
+            });
+
+            if (chatType === 'GROUP') {
+                if (groupChatItem) groupChatItem.classList.add('active');
+            } else {
+                const item = document.querySelector(`[data-chat-id="${chatId}"]`);
+                if (item) item.classList.add('active');
+            }
+
+            // Show messages without exposing a separate Messages tab in the menu.
+            chatTabs.forEach(tab => tab.classList.remove('active'));
+            const chatListView = document.getElementById('chatListView');
+            const staffListView = document.getElementById('staffListView');
+            const chatViewTab = document.getElementById('chatView');
+            if (chatListView) chatListView.style.display = 'none';
+            if (staffListView) staffListView.style.display = 'none';
+            if (chatViewTab) chatViewTab.style.display = 'flex';
+            loadMessages(chatId);
+            if (messageInput) messageInput.disabled = false;
+            if (sendMessageBtn) sendMessageBtn.disabled = false;
+        }
+
+        // Load messages for a chat
+        async function loadMessages(chatId) {
+            try {
+                const response = await fetch(`/api/chats/${chatId}/messages/`, {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    messagesContainer.innerHTML = '';
+                    data.messages.forEach(msg => {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = `message ${msg.is_own ? 'own' : ''}`;
+                        messageDiv.innerHTML = `
+                            <div class="message-content">
+                                ${msg.is_own ? '' : `<strong>${msg.sender}</strong><br>`}
+                                ${msg.content}
+                                <div class="message-time">${formatTime(msg.created_at)}</div>
+                            </div>
+                        `;
+                        messagesContainer.appendChild(messageDiv);
+                    });
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    loadChats();
+                }
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+
+        // Send message
+        async function sendMessage() {
+            const content = messageInput.value.trim();
+            if (!content || !currentChatId) return;
+
+            try {
+                const response = await fetch(`/api/chats/${currentChatId}/send/`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({ content })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    messageInput.value = '';
+                    loadMessages(currentChatId);
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+            }
+        }
+
+        if (sendMessageBtn) {
+            sendMessageBtn.addEventListener('click', sendMessage);
+        }
+        if (messageInput) {
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+        }
+
+        // Helper function to get CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Helper function to format time
+        function formatTime(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            if (date.toDateString() === today.toDateString()) {
+                return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            } else if (date.toDateString() === yesterday.toDateString()) {
+                return 'Yesterday';
+            } else {
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+        }
+
+        // Load group chat on init
+        async function initializeChat() {
+            try {
+                const response = await fetch('/api/chats/group/', {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                if (!response.ok) {
+                    throw new Error(`Unable to initialize chat (${response.status})`);
+                }
+                const data = await response.json();
+                if (data.success) {
+                    if (groupChatItem && data.chat_id) {
+                        groupChatItem.dataset.chatId = data.chat_id;
+                    }
+                    loadChats();
+                    return data.chat_id;
+                }
+            } catch (error) {
+                console.error('Error initializing chat:', error);
+            }
+            return null;
+        }
+
+        // Initialize chat when page loads
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeChat);
+        } else {
+            initializeChat();
+        }
+
+        setInterval(() => {
+            if (chatModal && chatModal.classList.contains('show') && currentChatId) {
+                loadMessages(currentChatId);
+            } else {
+                loadChats();
+            }
+        }, 30000);
     </script>
 
     {% block extra_js %}{% endblock %}

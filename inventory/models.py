@@ -82,6 +82,9 @@ class StockMovement(models.Model):
 
 class UserRegistration(models.Model):
     """Model for pending user registrations requiring admin approval."""
+    class StaffRole(models.TextChoices):
+        CASHIER = "cashier", "Cashier"
+        INVENTORY = "inventory", "Inventory Staff"
 
     BRANCH_CHOICES = [
         ('main', 'Main Branch'),
@@ -98,6 +101,7 @@ class UserRegistration(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     location = models.CharField(max_length=255, blank=True)
     branch = models.CharField(max_length=10, choices=BRANCH_CHOICES, default='main')
+    staff_role = models.CharField(max_length=20, choices=StaffRole.choices, default=StaffRole.CASHIER)
     password = models.CharField(max_length=128)  # Will store hashed password
     is_approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -170,6 +174,9 @@ class TransactionItem(models.Model):
 
 class UserProfile(models.Model):
     """Store user-specific preferences including theme customization."""
+    class StaffRole(models.TextChoices):
+        CASHIER = "cashier", "Cashier"
+        INVENTORY = "inventory", "Inventory Staff"
 
     COLOR_CHOICES = [
         ('pink', 'Pink'),
@@ -183,6 +190,9 @@ class UserProfile(models.Model):
     ]
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    staff_role = models.CharField(max_length=20, choices=StaffRole.choices, default=StaffRole.CASHIER)
+    address = models.CharField(max_length=255, blank=True)
+    birthday = models.DateField(blank=True, null=True)
     dark_mode = models.BooleanField(default=False)
     primary_color = models.CharField(max_length=20, choices=COLOR_CHOICES, default='pink')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -190,6 +200,17 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"Profile for {self.user.username}"
+
+    @property
+    def age(self):
+        """Return the user's age based on birthday, if available."""
+        if not self.birthday:
+            return None
+
+        today = timezone.localdate()
+        return today.year - self.birthday.year - (
+            (today.month, today.day) < (self.birthday.month, self.birthday.day)
+        )
 
     @property
     def theme_config(self):
@@ -218,3 +239,65 @@ class UserProfile(models.Model):
             'gradient': config['gradient'],
             'rgb': rgb_value,
         }
+
+
+class Chat(models.Model):
+    """Model for chat conversations (group or one-to-one)."""
+    class ChatType(models.TextChoices):
+        GROUP = 'GROUP', 'Group Chat'
+        DIRECT = 'DIRECT', 'Direct Chat'
+
+    chat_type = models.CharField(max_length=10, choices=ChatType.choices, default=ChatType.DIRECT)
+    name = models.CharField(max_length=255, blank=True, help_text="For group chats")
+    participants = models.ManyToManyField(User, related_name='chats')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        if self.chat_type == self.ChatType.GROUP:
+            return f"Group: {self.name}"
+        else:
+            return f"Chat between {', '.join([u.username for u in self.participants.all()])}"
+
+    def get_display_name(self, current_user):
+        """Get chat display name for the current user."""
+        if self.chat_type == self.ChatType.GROUP:
+            return self.name
+        else:
+            # For direct chats, show the other person's name
+            other_users = self.participants.exclude(id=current_user.id)
+            if other_users.exists():
+                return other_users.first().get_full_name() or other_users.first().username
+            return "Chat"
+
+
+class Message(models.Model):
+    """Model for individual chat messages."""
+    chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.sender.username} in {self.chat}: {self.content[:50]}"
+
+
+class ChatReadState(models.Model):
+    """Track the last message seen by each user in each chat."""
+    chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name='read_states')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_read_states')
+    last_read_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('chat', 'user')
+
+    def __str__(self):
+        return f"{self.user.username} read {self.chat} at {self.last_read_at}"

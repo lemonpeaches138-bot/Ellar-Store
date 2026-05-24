@@ -1,13 +1,29 @@
-{% extends 'base.html' %}
+{% extends 'modern_base.html' %}
 
 {% block title %}Delete Product | Ellar Store{% endblock %}
 
 {% block content %}
-<h2>Delete Product</h2>
-<p>Are you sure you want to delete <strong>{{ product.name }}</strong> ({{ product.sku }})?</p>
-<form method="post" class="form-card">
-    {% csrf_token %}
-    <button type="submit" class="button danger">Yes, Delete</button>
-    <a class="button secondary" href="{% url 'inventory:product-list' %}">Cancel</a>
-</form>
+<div class="dashboard-grid" style="max-width: 720px;">
+    <div class="modern-table-container">
+        <div class="table-header">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: var(--spacing-sm);">
+                <i data-lucide="trash-2" style="width: 20px; height: 20px;"></i>
+                Delete Product
+            </h3>
+        </div>
+        <form method="post" style="padding: var(--spacing-xl); display: grid; gap: var(--spacing-lg);">
+            {% csrf_token %}
+            <p style="margin: 0; color: var(--theme-text);">
+                Are you sure you want to delete <strong>{{ product.name }}</strong> ({{ product.sku }})?
+            </p>
+            <div style="display: flex; gap: var(--spacing-md); flex-wrap: wrap;">
+                <button type="submit" class="btn btn-danger" style="background: var(--danger-gradient); color: white;">
+                    <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                    Yes, Delete
+                </button>
+                <a class="btn btn-secondary" href="{% url 'inventory:product-list' %}">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}

@@ -21,6 +21,7 @@
         </div>
     </div>
 
+    {% if can_view_product_financials %}
     <div class="kpi-card success">
         <div class="kpi-header">
             <div>
@@ -36,6 +37,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <div class="kpi-card warning">
         <div class="kpi-header">
@@ -53,6 +55,7 @@
         </div>
     </div>
 
+    {% if can_view_product_financials %}
     <div class="kpi-card">
         <div class="kpi-header">
             <div>
@@ -70,6 +73,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
 
 <!-- Filters and Search -->
@@ -87,10 +91,12 @@
                 <button type="submit" class="btn btn-primary">Filter</button>
                 <a href="{% url 'inventory:product-list' %}" class="btn btn-secondary">Clear</a>
             </form>
+            {% if can_manage_products %}
             <a href="{% url 'inventory:product-add' %}" class="btn btn-primary">
                 <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
                 Add Product
             </a>
+            {% endif %}
         </div>
     </div>
 
@@ -112,18 +118,20 @@
                     <th>Product Name</th>
                     <th>Category</th>
                     <th style="width: 100px;">Stock</th>
+                    {% if can_view_product_financials %}
                     <th style="width: 100px;">Sold</th>
                     <th style="width: 120px;">Purchase Price</th>
                     <th style="width: 120px;">Selling Price</th>
                     <th style="width: 120px;">Profit/Unit</th>
                     <th style="width: 120px;">Total Profit</th>
+                    {% endif %}
                     <th style="width: 120px;">Expiration</th>
                     <th style="width: 150px;">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for product in products %}
-                    <tr class="product-row" data-product-id="{{ product.pk }}" data-reorder-level="{{ product.reorder_level }}" data-name="{{ product.name|lower }}" data-sku="{{ product.sku|lower }}" data-type="{{ product.get_product_type_display|lower }}">
+                    <tr class="product-row {% if product.quantity <= product.reorder_level %}low-stock-row{% elif product.quantity <= product.reorder_level|add:product.reorder_level %}medium-stock-row{% endif %}" data-product-id="{{ product.pk }}" data-reorder-level="{{ product.reorder_level }}" data-quantity="{{ product.quantity }}" data-name="{{ product.name|lower }}" data-sku="{{ product.sku|lower }}" data-type="{{ product.get_product_type_display|lower }}">
                         <td><strong>{{ product.sku }}</strong></td>
                         <td>
                             <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
@@ -133,7 +141,9 @@
                                 <div>
                                     <div style="font-weight: 600;">{{ product.name }}</div>
                                     {% if product.quantity <= product.reorder_level %}
-                                        <div style="font-size: 0.75rem; color: #ef4444;">⚠ Low stock</div>
+                                        <div style="font-size: 0.75rem; color: #ef4444; font-weight: 600;">⚠ Low stock</div>
+                                    {% elif product.quantity <= product.reorder_level|add:product.reorder_level %}
+                                        <div style="font-size: 0.75rem; color: #f59e0b; font-weight: 600;">⚠ Medium stock</div>
                                     {% endif %}
                                 </div>
                             </div>
@@ -141,15 +151,16 @@
                         <td>
                             <span class="status-badge status-success">{{ product.get_product_type_display }}</span>
                         </td>
-                        <td class="product-stock-cell" data-stock-cell="{{ product.pk }}">
+                        <td class="product-stock-cell" data-stock-cell="{{ product.pk }}" style="font-weight: 700;">
                             {% if product.quantity <= product.reorder_level %}
-                                <span class="status-badge status-danger">{{ product.quantity }}</span>
+                                <span class="status-badge status-danger">{{ product.quantity }} {% if product.quantity == 1 %}unit{% else %}units{% endif %}</span>
                             {% elif product.quantity <= product.reorder_level|add:product.reorder_level %}
-                                <span class="status-badge status-warning">{{ product.quantity }}</span>
+                                <span class="status-badge status-warning">{{ product.quantity }} {% if product.quantity == 1 %}unit{% else %}units{% endif %}</span>
                             {% else %}
-                                <span class="status-badge status-success">{{ product.quantity }}</span>
+                                <span class="status-badge status-success">{{ product.quantity }} {% if product.quantity == 1 %}unit{% else %}units{% endif %}</span>
                             {% endif %}
                         </td>
+                        {% if can_view_product_financials %}
                         <td>
                             {% if product.total_sold > 0 %}
                                 {% if product.total_sold >= 50 %}
@@ -167,6 +178,7 @@
                         <td style="font-weight: 600; color: #10b981;">₱{{ product.unit_price }}</td>
                         <td style="font-weight: 600; color: #667eea;">₱{{ product.profit_per_unit }}</td>
                         <td style="font-weight: 600; color: #667eea;">₱{{ product.total_profit }}</td>
+                        {% endif %}
                         <td>
                             {% if product.expiration_date %}
                                 {% with days_until_expiry=product.expiration_date|timeuntil %}
@@ -182,10 +194,13 @@
                         </td>
                         <td>
                             <div style="display: flex; gap: var(--spacing-xs); flex-wrap: wrap;">
+                                {% if can_manage_products %}
                                 <a href="{% url 'inventory:product-edit' product.pk %}" class="btn btn-secondary" style="padding: var(--spacing-xs) var(--spacing-sm); font-size: 0.75rem;">
                                     <i data-lucide="edit" style="width: 14px; height: 14px;"></i>
                                     Edit
                                 </a>
+                                {% endif %}
+                                {% if can_adjust_stock %}
                                 <button
                                     type="button"
                                     class="btn btn-secondary stock-adjust-btn"
@@ -200,6 +215,8 @@
                                     <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
                                     Stock
                                 </button>
+                                {% endif %}
+                                {% if can_manage_products %}
                                 <button
                                     type="button"
                                     class="btn btn-secondary product-delete-btn"
@@ -211,21 +228,24 @@
                                     <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
                                     Delete
                                 </button>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="11" style="text-align: center; padding: var(--spacing-2xl);">
+                        <td colspan="{% if can_view_product_financials %}11{% else %}6{% endif %}" style="text-align: center; padding: var(--spacing-2xl);">
                             <div style="display: flex; flex-direction: column; align-items: center; gap: var(--spacing-lg);">
                                 <i data-lucide="inbox" style="width: 64px; height: 64px; color: var(--light-muted); opacity: 0.5;"></i>
                                 <div>
                                     <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: var(--spacing-sm);">No products found</div>
                                     <div style="color: var(--light-muted);">Start by adding your first product to the inventory</div>
+                                    {% if can_manage_products %}
                                     <a href="{% url 'inventory:product-add' %}" class="btn btn-primary" style="margin-top: var(--spacing-lg);">
                                         <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
                                         Add Your First Product
                                     </a>
+                                    {% endif %}
                                 </div>
                             </div>
                         </td>
@@ -350,6 +370,33 @@
 
 .stock-adjust-btn {
     cursor: pointer;
+}
+
+/* Low Stock Row Styling */
+.product-row.low-stock-row {
+    background: rgba(239, 68, 68, 0.08);
+    border-left: 3px solid #ef4444;
+}
+
+.product-row.low-stock-row:hover {
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.product-row.medium-stock-row {
+    background: rgba(245, 158, 11, 0.06);
+    border-left: 3px solid #f59e0b;
+}
+
+.product-row.medium-stock-row:hover {
+    background: rgba(245, 158, 11, 0.1);
+}
+
+body.dark-mode .product-row.low-stock-row {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+body.dark-mode .product-row.medium-stock-row {
+    background: rgba(245, 158, 11, 0.12);
 }
 
 .stock-modal-overlay {
@@ -795,10 +842,21 @@
             activeStockButton.dataset.currentStock = newQuantity;
             if (row) {
                 row.dataset.reorderLevel = reorderLevel;
+                row.dataset.quantity = newQuantity;
+                
+                // Update row class based on stock level
+                row.classList.remove('low-stock-row', 'medium-stock-row');
+                if (newQuantity <= reorderLevel) {
+                    row.classList.add('low-stock-row');
+                } else if (newQuantity <= reorderLevel * 2) {
+                    row.classList.add('medium-stock-row');
+                }
             }
 
             if (stockCell) {
-                stockCell.innerHTML = `<span class="status-badge ${getStockBadgeClass(newQuantity, reorderLevel)}">${newQuantity}</span>`;
+                const badgeClass = getStockBadgeClass(newQuantity, reorderLevel);
+                const unitText = newQuantity === 1 ? 'unit' : 'units';
+                stockCell.innerHTML = `<span class="status-badge ${badgeClass}">${newQuantity} ${unitText}</span>`;
             }
 
             closeStockModal();
